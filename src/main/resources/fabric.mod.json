@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"id": "modid",
 	"version": "${version}",
-	"name": "Example Mod",
+	"name": "Mineman",
 	"description": "This is an example description! Tell everyone what your mod is about!",
 	"authors": [
 		"Me!"
@@ -20,6 +20,9 @@
 		],
 		"client": [
 			"com.example.client.ExampleModClient"
+		],
+		"modmenu": [
+			"com.example.client.compat.modmenu.ModMenuImpl"
 		]
 	},
 	"mixins": [

@@ -3,7 +3,8 @@
 	"package": "com.example.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"ExampleClientMixin",
+		"InventoryAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
