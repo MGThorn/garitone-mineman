@@ -19,13 +19,17 @@ repositories {
 		url = "https://maven.terraformersmc.com/releases/"
 		content { includeGroupAndSubgroups("com.terraformersmc") }
 	}
+	maven {
+		url = "https://babbaj.github.io/maven/"
+		content { includeGroup("dev.babbaj") }
+	}
 }
 
 loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"modid" {
+		"mineman" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -43,7 +47,15 @@ dependencies {
 
 	modImplementation "fi.dy.masa.malilib:malilib-fabric-${project.minecraft_version}:${project.malilib_version}"
 	modImplementation "fi.dy.masa.litematica:litematica-fabric-${project.minecraft_version}:${project.litematica_version}"
+	modImplementation "fi.dy.masa.itemscroller:itemscroller-fabric-${project.minecraft_version}:${project.itemscroller_version}"
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	// Baritone — from CI artifact: https://github.com/cabaletta/baritone/actions/runs/29350719148/artifacts/8318410725
+	// Download the ZIP, extract baritone-api-fabric-*.jar, place it in libs/, then sync Gradle.
+	modCompileOnly fileTree(dir: 'libs', include: 'baritone-standalone-fabric-*.jar')
+	modLocalRuntime fileTree(dir: 'libs', include: 'baritone-standalone-fabric-*.jar')
+	localRuntime "dev.babbaj:nether-pathfinder:1.6"
 }
 
 processResources {
