@@ -48,6 +48,7 @@ dependencies {
 	modImplementation "fi.dy.masa.malilib:malilib-fabric-${project.minecraft_version}:${project.malilib_version}"
 	modImplementation "fi.dy.masa.litematica:litematica-fabric-${project.minecraft_version}:${project.litematica_version}"
 	modImplementation "fi.dy.masa.itemscroller:itemscroller-fabric-${project.minecraft_version}:${project.itemscroller_version}"
+	modImplementation "fi.dy.masa.minihud:minihud-fabric-${project.minecraft_version}:${project.minihud_version}"
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 	modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
 

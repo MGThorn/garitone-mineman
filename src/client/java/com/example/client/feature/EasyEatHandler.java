@@ -20,10 +20,17 @@ public class EasyEatHandler {
     private static int targetSlot = -1;
     private static int foodContainerSlot = -1;
     private static boolean targetSlotWasEmpty = false;
+    private static boolean justFinished = false;
+    private static boolean externalHold = false;
+
+    /** Lets other features (e.g. HungryMineman) request eating directly, without touching the autoEat setting. */
+    public static void setExternalHold(boolean hold) {
+        externalHold = hold;
+    }
 
     public static void onClientTick() {
         Minecraft mc = Minecraft.getInstance();
-        boolean held = Hotkeys.EASY_EAT.getKeybind().isKeybindHeld() || isAutoEatHeld(mc);
+        boolean held = Hotkeys.EASY_EAT.getKeybind().isKeybindHeld() || isAutoEatHeld(mc) || externalHold;
 
         if (mc.player == null || mc.level == null) {
             if (active) { mc.options.keyUse.setDown(false); reset(); }
@@ -240,5 +247,13 @@ public class EasyEatHandler {
         targetSlot = -1;
         foodContainerSlot = -1;
         targetSlotWasEmpty = false;
+        justFinished = true;
+    }
+
+    /** One-shot: true if an eating attempt just concluded (success or giving up) since the last call. */
+    public static boolean consumeJustFinishedEating() {
+        boolean result = justFinished;
+        justFinished = false;
+        return result;
     }
 }

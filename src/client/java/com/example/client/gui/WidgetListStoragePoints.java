@@ -1,6 +1,8 @@
 package com.example.client.gui;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.jetbrains.annotations.Nullable;
 import fi.dy.masa.malilib.gui.widgets.WidgetListBase;
 import com.example.client.storage.StoragePoint;
@@ -33,7 +35,16 @@ public class WidgetListStoragePoints extends WidgetListBase<StoragePoint, Widget
 
     @Override
     protected Collection<StoragePoint> getAllEntries() {
-        return StoragePointManager.getInstance().getStoragePoints();
+        List<StoragePoint> all = StoragePointManager.getInstance().getStoragePoints();
+        String filter = this.parentGui.getSearchFilter().trim().toLowerCase();
+
+        if (filter.isEmpty()) {
+            return all;
+        }
+
+        return all.stream()
+                .filter(point -> point.getName().toLowerCase().contains(filter))
+                .collect(Collectors.toList());
     }
 
     @Override

@@ -4,7 +4,10 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -14,14 +17,15 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.render.RenderUtils;
 import fi.dy.masa.malilib.util.data.Color4f;
+import com.example.client.config.Configs;
 
 /**
- * Repurposes the Flint item as a single-selection area tool, the same way Litematica repurposes
- * a stick: left click sets pos1, right click sets pos2. Only one selection (pos1/pos2) ever exists.
- * Uses its own long-range raytrace (bound via the selectionSetPos1/2 hotkeys, default BUTTON_1/BUTTON_2)
- * instead of vanilla block-interaction events, so it isn't limited by survival reach distance.
- * Alt + scroll while holding flint moves the last-selected corner along the direction the player
- * is looking, instead of changing the hotbar slot.
+ * Repurposes a configurable item (default: Flint, see {@code selectionToolItem}) as a single-selection
+ * area tool, the same way Litematica repurposes a stick: left click sets pos1, right click sets pos2.
+ * Only one selection (pos1/pos2) ever exists. Uses its own long-range raytrace (bound via the
+ * selectionSetPos1/2 hotkeys, default BUTTON_1/BUTTON_2) instead of vanilla block-interaction events,
+ * so it isn't limited by survival reach distance. Alt + scroll while holding the tool moves the
+ * last-selected corner along the direction the player is looking, instead of changing the hotbar slot.
  */
 public class SelectionToolHandler {
     private static final double MAX_DISTANCE = 1024.0;
@@ -73,13 +77,7 @@ public class SelectionToolHandler {
             return false;
         }
 
-        BlockPos hit = rayTrace(player);
-
-        if (hit != null) {
-            pos1 = hit;
-            lastSelectedCorner = Corner.POS1;
-        }
-
+        setPos1FromLookRay(player);
         return true;
     }
 
@@ -92,6 +90,30 @@ public class SelectionToolHandler {
             return false;
         }
 
+        setPos2FromLookRay(player);
+        return true;
+    }
+
+    /**
+     * Sets pos1 from the player's current look direction regardless of held item — used by the
+     * GUI selection buttons, which are an explicit action and shouldn't require holding the tool.
+     */
+    public static boolean setPos1FromLookRay(Player player) {
+        BlockPos hit = rayTrace(player);
+
+        if (hit != null) {
+            pos1 = hit;
+            lastSelectedCorner = Corner.POS1;
+        }
+
+        return hit != null;
+    }
+
+    /**
+     * Sets pos2 from the player's current look direction regardless of held item — used by the
+     * GUI selection buttons, which are an explicit action and shouldn't require holding the tool.
+     */
+    public static boolean setPos2FromLookRay(Player player) {
         BlockPos hit = rayTrace(player);
 
         if (hit != null) {
@@ -99,11 +121,21 @@ public class SelectionToolHandler {
             lastSelectedCorner = Corner.POS2;
         }
 
-        return true;
+        return hit != null;
     }
 
     private static boolean isHoldingFlint(Player player) {
-        return player.getMainHandItem().is(Items.FLINT) || player.getOffhandItem().is(Items.FLINT);
+        Item tool = resolveToolItem();
+        return player.getMainHandItem().is(tool) || player.getOffhandItem().is(tool);
+    }
+
+    private static Item resolveToolItem() {
+        Identifier id = Identifier.tryParse(Configs.Generic.SELECTION_TOOL_ITEM.getStringValue().trim());
+        return id != null ? BuiltInRegistries.ITEM.getOptional(id).orElse(Items.FLINT) : Items.FLINT;
+    }
+
+    public static String getToolDisplayName() {
+        return resolveToolItem().getName().getString();
     }
 
     @Nullable

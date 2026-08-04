@@ -3,9 +3,17 @@
 	"package": "com.example.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"AbstractContainerScreenAccessor",
 		"ExampleClientMixin",
 		"InventoryAccessor",
-		"MixinMouseHandler"
+		"MixinAbstractContainerMenu",
+		"MixinChatComponent",
+		"MixinChatScreen",
+		"MixinItemScrollerSort",
+		"MixinMouseHandler",
+		"MixinMultiPlayerGameMode",
+		"MixinSoundManager",
+		"ItemScrollerInventoryUtilsInvoker"
 	],
 	"injectors": {
 		"defaultRequire": 1

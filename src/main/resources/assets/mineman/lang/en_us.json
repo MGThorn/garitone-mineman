@@ -13,6 +13,8 @@
   "mineman.config.generic.comment.moveMatchingIgnoreMetadata": "Ignore item metadata when matching items to move",
   "mineman.config.generic.name.berndDasBrot": "Bernd das Brot",
   "mineman.config.generic.comment.berndDasBrot": "When enabled, autoEat/easyEat always picks bread first, before applying any other pick order rules",
+  "mineman.config.generic.name.advancedAutoStoreModus": "advancedAutoStoreModus",
+  "mineman.config.generic.comment.advancedAutoStoreModus": "Enabled: Quick Deposit first checks each storage block's last-known contents and opens whichever one looks best able to take your current inventory, in one attempt. Disabled: no guessing - it just tries every usable storage block in order, starting with the first, opening and depositing into each one in turn, and keeps going until either your inventory has nothing left to deposit (ignoring quickDepositDisabledSlots) or every storage block has been tried.",
   "mineman.config.hotkeys.name.openGuiMainMenu": "openGuiMainMenu",
   "mineman.config.hotkeys.comment.openGuiMainMenu": "open in-game mineman config GUI",
   "mineman.config.hotkeys.name.autoEatToggle": "autoEatToggle",
@@ -24,5 +26,9 @@
   "mineman.config.hotkeys.name.selectionSetPos1": "selectionSetPos1",
   "mineman.config.hotkeys.comment.selectionSetPos1": "While holding Flint, sets selection corner 1 to whatever you're looking at (unlimited range)",
   "mineman.config.hotkeys.name.selectionSetPos2": "selectionSetPos2",
-  "mineman.config.hotkeys.comment.selectionSetPos2": "While holding Flint, sets selection corner 2 to whatever you're looking at (unlimited range)"
+  "mineman.config.hotkeys.comment.selectionSetPos2": "While holding Flint, sets selection corner 2 to whatever you're looking at (unlimited range)",
+  "mineman.config.generic.name.muteAllSounds": "muteAllSounds",
+  "mineman.config.generic.comment.muteAllSounds": "Mutes all game sounds while enabled",
+  "mineman.config.hotkeys.name.muteAllSoundsToggle": "muteAllSoundsToggle",
+  "mineman.config.hotkeys.comment.muteAllSoundsToggle": "Toggle muteAllSounds on/off"
 }

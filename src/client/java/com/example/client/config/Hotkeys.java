@@ -14,6 +14,15 @@ public class Hotkeys {
     public static final ConfigHotkey MOVE_MATCHING_IGNORE_METADATA_TOGGLE = new ConfigHotkey("moveMatchingIgnoreMetadataToggle", "").apply(HOTKEYS_KEY);
     public static final ConfigHotkey SELECTION_SET_POS1                = new ConfigHotkey("selectionSetPos1", "BUTTON_1", KeybindSettings.PRESS_ALLOWEXTRA).apply(HOTKEYS_KEY);
     public static final ConfigHotkey SELECTION_SET_POS2                = new ConfigHotkey("selectionSetPos2", "BUTTON_2", KeybindSettings.PRESS_ALLOWEXTRA).apply(HOTKEYS_KEY);
+    public static final ConfigHotkey PAUSE_RESUME_TOGGLE                = new ConfigHotkey("pauseResumeToggle",           "P").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey CANCEL_ALL_TASKS                  = new ConfigHotkey("cancelAllTasks",              "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey STORAGE_SET_GOAL                  = new ConfigHotkey("storageSetGoal",              "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey STORAGE_GO_TO                     = new ConfigHotkey("storageGoTo",                 "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey STORAGE_STORE_ITEMS               = new ConfigHotkey("storageStoreItems",           "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey STORAGE_CHEST_QUICK_DEPOSIT       = new ConfigHotkey("storageChestQuickDeposit",    "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey OPEN_TASK_MANAGER                 = new ConfigHotkey("openTaskManager",            "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey OPEN_STORAGE_POINTS               = new ConfigHotkey("openStoragePoints",         "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey MUTE_ALL_SOUNDS_TOGGLE             = new ConfigHotkey("muteAllSoundsToggle",       "").apply(HOTKEYS_KEY);
 
-    public static final List<ConfigHotkey> HOTKEY_LIST = ImmutableList.of(OPEN_GUI, AUTO_EAT_TOGGLE, EASY_EAT, MOVE_MATCHING_IGNORE_METADATA_TOGGLE, SELECTION_SET_POS1, SELECTION_SET_POS2);
+    public static final List<ConfigHotkey> HOTKEY_LIST = ImmutableList.of(OPEN_GUI, AUTO_EAT_TOGGLE, EASY_EAT, MOVE_MATCHING_IGNORE_METADATA_TOGGLE, SELECTION_SET_POS1, SELECTION_SET_POS2, PAUSE_RESUME_TOGGLE, CANCEL_ALL_TASKS, STORAGE_SET_GOAL, STORAGE_GO_TO, STORAGE_STORE_ITEMS, STORAGE_CHEST_QUICK_DEPOSIT, OPEN_TASK_MANAGER, OPEN_STORAGE_POINTS, MUTE_ALL_SOUNDS_TOGGLE);
 }

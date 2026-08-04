@@ -8,6 +8,7 @@ public class StoragePoint {
     private String name;
     private boolean enabled;
     private boolean locked;
+    private boolean selected;
     private int x;
     private int y;
     private int z;
@@ -17,7 +18,7 @@ public class StoragePoint {
     private int corner2X;
     private int corner2Y;
     private int corner2Z;
-    @Nullable private String litematicFileName;
+    @Nullable private String snapshotFileName;
     private List<StorageBlockEntry> storageBlocks = new ArrayList<>();
 
     public StoragePoint(String name, boolean enabled) {
@@ -32,6 +33,8 @@ public class StoragePoint {
     public void toggleEnabled() { this.enabled = !this.enabled; }
     public boolean isLocked() { return this.locked; }
     public void setLocked(boolean locked) { this.locked = locked; }
+    public boolean isSelected() { return this.selected; }
+    public void setSelected(boolean selected) { this.selected = selected; }
     public int getX() { return this.x; }
     public void setX(int x) { this.x = x; }
     public int getY() { return this.y; }
@@ -47,8 +50,8 @@ public class StoragePoint {
     public int getCorner2Z() { return this.corner2Z; }
     public void setCorner2(int x, int y, int z) { this.corner2X = x; this.corner2Y = y; this.corner2Z = z; }
     @Nullable
-    public String getLitematicFileName() { return this.litematicFileName; }
-    public void setLitematicFileName(@Nullable String litematicFileName) { this.litematicFileName = litematicFileName; }
+    public String getSnapshotFileName() { return this.snapshotFileName; }
+    public void setSnapshotFileName(@Nullable String snapshotFileName) { this.snapshotFileName = snapshotFileName; }
     public List<StorageBlockEntry> getStorageBlocks() { return this.storageBlocks; }
     public void setStorageBlocks(List<StorageBlockEntry> storageBlocks) { this.storageBlocks = storageBlocks; }
 }

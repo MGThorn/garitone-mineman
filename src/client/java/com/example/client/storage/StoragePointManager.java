@@ -28,7 +28,53 @@ public class StoragePointManager {
     }
 
     public void setSelectedStoragePoint(@Nullable StoragePoint point) {
+        if (this.selectedStoragePoint == point) {
+            return;
+        }
+
+        if (this.selectedStoragePoint != null) {
+            this.selectedStoragePoint.setSelected(false);
+        }
+
         this.selectedStoragePoint = point;
+
+        if (point != null) {
+            point.setSelected(true);
+        }
+
+        this.save();
+    }
+
+    /**
+     * Returns the explicitly selected storage point if there is one, otherwise the closest enabled
+     * storage point to the given position. Used by hotkeys, which have no GUI row to click on.
+     */
+    @Nullable
+    public StoragePoint getSelectedOrNearestStoragePoint(BlockPos playerPos) {
+        if (this.selectedStoragePoint != null) {
+            return this.selectedStoragePoint;
+        }
+
+        StoragePoint nearest = null;
+        long bestDistSq = Long.MAX_VALUE;
+
+        for (StoragePoint point : this.getStoragePoints()) {
+            if (point.isEnabled() == false) {
+                continue;
+            }
+
+            long dx = point.getX() - playerPos.getX();
+            long dy = point.getY() - playerPos.getY();
+            long dz = point.getZ() - playerPos.getZ();
+            long distSq = dx * dx + dy * dy + dz * dz;
+
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                nearest = point;
+            }
+        }
+
+        return nearest;
     }
 
     private static boolean isSingleplayer() {
@@ -54,7 +100,21 @@ public class StoragePointManager {
         this.loadedWorldId = worldId;
 
         if (this.storagePointsByWorld.containsKey(worldId) == false) {
-            this.storagePointsByWorld.put(worldId, StoragePointPersistence.loadWorldIndex(isSingleplayer(), worldId));
+            Map<String, List<StoragePoint>> loaded = StoragePointPersistence.loadWorldIndex(isSingleplayer(), worldId);
+            this.storagePointsByWorld.put(worldId, loaded);
+            this.restoreSelectedStoragePoint(loaded);
+        }
+    }
+
+    /** Re-selects whichever point (if any) was flagged "selected" the last time this world was saved. */
+    private void restoreSelectedStoragePoint(Map<String, List<StoragePoint>> data) {
+        for (List<StoragePoint> points : data.values()) {
+            for (StoragePoint point : points) {
+                if (point.isSelected()) {
+                    this.selectedStoragePoint = point;
+                    return;
+                }
+            }
         }
     }
 
@@ -77,6 +137,30 @@ public class StoragePointManager {
         return list != null ? list : Collections.emptyList();
     }
 
+    /**
+     * Finds the storage block entry (if any) registered at the given world position, in the current
+     * world/dimension. Matches either half of a double chest, since both halves share one entry.
+     */
+    @Nullable
+    public StorageBlockEntry findStorageBlockEntry(BlockPos pos) {
+        for (StoragePoint point : this.getStoragePoints()) {
+            for (StorageBlockEntry entry : point.getStorageBlocks()) {
+                if (entry.getX() == pos.getX() && entry.getY() == pos.getY() && entry.getZ() == pos.getZ()) {
+                    return entry;
+                }
+
+                if (entry.hasSecondPosition()
+                        && entry.getSecondX() == pos.getX()
+                        && entry.getSecondY() == pos.getY()
+                        && entry.getSecondZ() == pos.getZ()) {
+                    return entry;
+                }
+            }
+        }
+
+        return null;
+    }
+
     @Nullable
     public StoragePoint addStoragePoint(String name, int x, int y, int z, BlockPos corner1, BlockPos corner2) {
         List<StoragePoint> list = this.getCurrentListOrNull();
@@ -91,15 +175,15 @@ public class StoragePointManager {
         point.setZ(z);
         point.setCorner1(corner1.getX(), corner1.getY(), corner1.getZ());
         point.setCorner2(corner2.getX(), corner2.getY(), corner2.getZ());
-        point.setLitematicFileName(StoragePointPersistence.createLitematicFile(name));
+        point.setSnapshotFileName(StoragePointPersistence.createSnapshotFile(name));
         list.add(point);
         this.save();
         return point;
     }
 
     public void renameStoragePoint(StoragePoint point, String newName) {
-        String newFileName = StoragePointPersistence.renameLitematicFile(point.getLitematicFileName(), newName);
-        point.setLitematicFileName(newFileName);
+        String newFileName = StoragePointPersistence.renameSnapshotFile(point.getSnapshotFileName(), newName);
+        point.setSnapshotFileName(newFileName);
         point.setName(newName);
         this.save();
     }
@@ -126,6 +210,12 @@ public class StoragePointManager {
 
         if (worldId != null && data != null) {
             StoragePointPersistence.saveWorldIndex(isSingleplayer(), worldId, data);
+
+            for (List<StoragePoint> points : data.values()) {
+                for (StoragePoint point : points) {
+                    StoragePointPersistence.writeSnapshotFile(point);
+                }
+            }
         }
     }
 }

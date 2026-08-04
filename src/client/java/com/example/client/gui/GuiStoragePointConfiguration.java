@@ -9,6 +9,9 @@ import fi.dy.masa.malilib.gui.button.ButtonGeneric;
 import fi.dy.masa.malilib.gui.button.IButtonActionListener;
 import fi.dy.masa.malilib.gui.wrappers.TextFieldType;
 import fi.dy.masa.malilib.util.GuiUtils;
+import com.example.client.compat.baritone.BaritoneController;
+import com.example.client.feature.SmartMinemanHandler;
+import com.example.client.storage.SingleplayerContentReader;
 import com.example.client.storage.StorageBlockEntry;
 import com.example.client.storage.StorageBlockScanner;
 import com.example.client.storage.StoragePoint;
@@ -19,8 +22,6 @@ import com.example.client.storage.StoragePointManager;
  * wired up to a StoragePoint instead of a SchematicPlacement. Every button/field is a dummy for now.
  */
 public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry, WidgetStorageBlockEntry, WidgetListStorageBlocks> {
-    private static final IButtonActionListener NO_OP = (button, mouseButton) -> {};
-
     private final StoragePoint storagePoint;
     private GuiTextFieldGeneric textFieldRename;
     private GuiTextFieldInteger textFieldX;
@@ -40,6 +41,15 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
             BlockPos corner1 = new BlockPos(storagePoint.getCorner1X(), storagePoint.getCorner1Y(), storagePoint.getCorner1Z());
             BlockPos corner2 = new BlockPos(storagePoint.getCorner2X(), storagePoint.getCorner2Y(), storagePoint.getCorner2Z());
             storagePoint.setStorageBlocks(StorageBlockScanner.scan(this.mc.level, corner1, corner2, storagePoint.getStorageBlocks()));
+
+            // Populate contents for any block not opened yet this session (singleplayer only; a no-op
+            // on a remote server or if the block entity isn't currently loaded).
+            for (StorageBlockEntry entry : storagePoint.getStorageBlocks()) {
+                if (entry.hasContents() == false) {
+                    entry.setContents(SingleplayerContentReader.readDirectMerged(entry));
+                }
+            }
+
             StoragePointManager.getInstance().save();
         }
     }
@@ -56,7 +66,7 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
 
     @Override
     protected WidgetListStorageBlocks createListWidget(int listX, int listY) {
-        return new WidgetListStorageBlocks(listX, listY, this.getBrowserWidth(), this.getBrowserHeight(), this.storagePoint.getStorageBlocks());
+        return new WidgetListStorageBlocks(listX, listY, this.getBrowserWidth(), this.getBrowserHeight(), this.storagePoint.getStorageBlocks(), this);
     }
 
     @Override
@@ -160,7 +170,7 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
 
             x += this.createButton(x, y, -1, "Set Goal", (btn, mb) -> this.sendBaritoneGoal()) + 1;
             x += this.createButton(x, y, -1, "Go To", (btn, mb) -> this.sendBaritoneGoTo()) + 1;
-            this.createButton(x, y, -1, "Store Items");
+            this.createButton(x, y, -1, "Store Items", (btn, mb) -> this.triggerStoreItems());
         }
         else {
             y += 32;
@@ -170,7 +180,7 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
             this.createButton(x, y, width, "Go To", (btn, mb) -> this.sendBaritoneGoTo());
             y += 21;
 
-            this.createButton(x, y, width, "Store Items");
+            this.createButton(x, y, width, "Store Items", (btn, mb) -> this.triggerStoreItems());
         }
 
         String backLabel = "Storage Points";
@@ -253,10 +263,6 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
         return button;
     }
 
-    private int createButton(int x, int y, int width, String label) {
-        return this.createButton(x, y, width, label, NO_OP);
-    }
-
     private int createButton(int x, int y, int width, String label, IButtonActionListener listener) {
         if (width == -1) {
             width = this.getStringWidth(label) + 10;
@@ -267,19 +273,17 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
     }
 
     private void sendBaritoneGoal() {
-        if (this.mc.player != null) {
-            this.mc.player.connection.sendChat("#goal " + this.storagePoint.getX()
-                    + " " + this.storagePoint.getY() + " " + this.storagePoint.getZ());
-        }
+        BaritoneController.sendGoal(new BlockPos(this.storagePoint.getX(), this.storagePoint.getY(), this.storagePoint.getZ()));
     }
 
     private void sendBaritoneGoTo() {
-        this.sendBaritoneGoal();
+        BaritoneController.sendGoTo(new BlockPos(this.storagePoint.getX(), this.storagePoint.getY(), this.storagePoint.getZ()));
+        this.closeGui(false);
+    }
 
-        if (this.mc.player != null) {
-            this.mc.player.connection.sendChat("#path");
-        }
-
+    private void triggerStoreItems() {
+        StoragePointManager.getInstance().setSelectedStoragePoint(this.storagePoint);
+        SmartMinemanHandler.triggerManualStoreItems();
         this.closeGui(false);
     }
 

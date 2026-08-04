@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import fi.dy.masa.malilib.MaLiLibConfigs;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.GuiConfigsBase;
@@ -18,6 +19,8 @@ import fi.dy.masa.malilib.util.data.ModInfo;
 import com.example.Reference;
 import com.example.client.config.Configs;
 import com.example.client.config.Hotkeys;
+import com.example.client.feature.MinemanCancelController;
+import com.example.client.feature.MinemanPauseController;
 
 public class GuiMinemanMain extends GuiConfigsBase {
     private Tab activeTab = Tab.ALL;
@@ -39,12 +42,38 @@ public class GuiMinemanMain extends GuiConfigsBase {
 
         for (Tab tab : Tab.values()) {
             int w = this.getStringWidth(tab.displayName) + 12;
-            ButtonGeneric btn = new ButtonGeneric(x, y, w, 20, tab.displayName);
-            boolean disabled = tab == this.activeTab || (tab == Tab.STORAGE_POINTS && this.mc.player == null);
+            ButtonGeneric btn = new ButtonGeneric(x, y, w, 20, tab.displayName, tab.hoverLines);
+            boolean disabled = tab == this.activeTab
+                    || ((tab == Tab.STORAGE_POINTS || tab == Tab.TASK_MANAGER || tab == Tab.SORTING_SETTINGS) && this.mc.player == null);
             btn.setEnabled(!disabled);
             this.addButton(btn, new TabListener(tab));
             x += w + 2;
         }
+
+        int pauseWidth = this.getStringWidth(pauseButtonLabel()) + 14;
+        ButtonGeneric pauseButton = new ButtonGeneric(
+                GuiUtils.getScaledWindowWidth() - pauseWidth - 10, y, pauseWidth, 20, pauseButtonLabel());
+        this.addButton(pauseButton, (btn, mouseButton) -> {
+            MinemanPauseController.toggle();
+            btn.setDisplayString(pauseButtonLabel());
+        });
+
+        String cancelLabel = "Cancel";
+        int cancelWidth = this.getStringWidth(cancelLabel) + 14;
+        ButtonGeneric cancelButton = new ButtonGeneric(
+                GuiUtils.getScaledWindowWidth() - pauseWidth - cancelWidth - 12, y, cancelWidth, 20, cancelLabel);
+        this.addButton(cancelButton, (btn, mouseButton) -> {
+            MinemanCancelController.cancelAll();
+            pauseButton.setDisplayString(pauseButtonLabel());
+
+            if (this.mc.player != null) {
+                this.mc.player.displayClientMessage(Component.literal("Mineman: CANCELLED"), true);
+            }
+        });
+    }
+
+    private static String pauseButtonLabel() {
+        return MinemanPauseController.isPaused() ? "Mineman: §cPAUSED§r" : "Mineman: §aRUNNING§r";
     }
 
     @Override
@@ -111,6 +140,20 @@ public class GuiMinemanMain extends GuiConfigsBase {
             GuiBase.openGui(new GuiStoragePoints(this));
             return;
         }
+        if (tab == Tab.TASK_MANAGER) {
+            if (this.mc.player == null) {
+                return;
+            }
+            GuiBase.openGui(new GuiTaskManager(this));
+            return;
+        }
+        if (tab == Tab.SORTING_SETTINGS) {
+            if (this.mc.player == null) {
+                return;
+            }
+            GuiBase.openGui(new GuiInventorySortConfig(this));
+            return;
+        }
         this.activeTab = tab;
         this.clearElements();
         this.reCreateListWidget();
@@ -121,12 +164,20 @@ public class GuiMinemanMain extends GuiConfigsBase {
         ALL("All"),
         GENERIC("Generic"),
         HOTKEYS("Hotkeys"),
-        STORAGE_POINTS("Storage Points");
+        STORAGE_POINTS("Storage Points"),
+        TASK_MANAGER("Task Manager"),
+        SORTING_SETTINGS("Sorting Settings",
+                "Configure which item belongs in each of your inventory slots.",
+                "When Item Scroller's sortInventory hotkey is pressed, those slots",
+                "are filled in first (the best tool tier wins for tool slots),",
+                "then the rest of your inventory is sorted normally.");
 
         final String displayName;
+        final String[] hoverLines;
 
-        Tab(String displayName) {
+        Tab(String displayName, String... hoverLines) {
             this.displayName = displayName;
+            this.hoverLines = hoverLines;
         }
     }
 

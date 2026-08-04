@@ -30,7 +30,18 @@ public class Configs {
         public static final ConfigInteger    AUTO_EAT_THRESHOLD            = new ConfigInteger("autoEatThreshold", 6, 1, 20, true).apply(GENERIC_KEY);
         public static final ConfigBoolean    MOVE_MATCHING_IGNORE_METADATA = new ConfigBoolean("moveMatchingIgnoreMetadata", false).apply(GENERIC_KEY);
         public static final ConfigBoolean    BERND_DAS_BROT                = new ConfigBoolean("berndDasBrot", false).apply(GENERIC_KEY);
+        public static final ConfigString     SELECTION_TOOL_ITEM           = new ConfigString("selectionToolItem", "minecraft:flint").apply(GENERIC_KEY);
+        public static final ConfigInteger    MAX_REGION_SIZE               = new ConfigInteger("maxRegionSize", 200_000, 1, 10_000_000, false).apply(GENERIC_KEY);
+        public static final ConfigOptionList FILL_STRATEGY                 = new ConfigOptionList("fillStrategy", FillStrategy.FIRST_AVAILABLE_SLOT).apply(GENERIC_KEY);
+        public static final ConfigBoolean    SMART_MINEMAN                 = new ConfigBoolean("smartMineman", false).apply(GENERIC_KEY);
+        public static final ConfigBoolean    HUNGRY_MINEMAN                = new ConfigBoolean("hungryMineman", false).apply(GENERIC_KEY);
+        public static final ConfigInteger    SMART_MINEMAN_FREE_SLOTS_THRESHOLD = new ConfigInteger("smartMinemanFreeSlotsThreshold", 1, 0, 36, true).apply(GENERIC_KEY);
+        public static final ConfigString     QUICK_DEPOSIT_DISABLED_SLOTS  = new ConfigString("quickDepositDisabledSlots", "0-8,9,17,18,26,27,35").apply(GENERIC_KEY);
+        public static final ConfigBoolean    PROTECT_STORAGE_POINTS        = new ConfigBoolean("protectStoragePoints", true).apply(GENERIC_KEY);
+        public static final ConfigBoolean    HIDE_BARITONE_CHAT_FEEDBACK   = new ConfigBoolean("hideBaritoneChatFeedback", true).apply(GENERIC_KEY);
+        public static final ConfigBoolean    ADVANCED_AUTO_STORE_MODUS     = new ConfigBoolean("advancedAutoStoreModus", true).apply(GENERIC_KEY);
+        public static final ConfigBoolean    MUTE_ALL_SOUNDS               = new ConfigBoolean("muteAllSounds", false).apply(GENERIC_KEY);
 
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT);
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS);
     }
 }
