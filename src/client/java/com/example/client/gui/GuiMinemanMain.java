@@ -4,7 +4,6 @@ import java.util.Collections;
 import java.util.List;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import fi.dy.masa.malilib.MaLiLibConfigs;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.GuiConfigsBase;
@@ -19,8 +18,6 @@ import fi.dy.masa.malilib.util.data.ModInfo;
 import com.example.Reference;
 import com.example.client.config.Configs;
 import com.example.client.config.Hotkeys;
-import com.example.client.feature.MinemanCancelController;
-import com.example.client.feature.MinemanPauseController;
 
 public class GuiMinemanMain extends GuiConfigsBase {
     private Tab activeTab = Tab.ALL;
@@ -49,31 +46,6 @@ public class GuiMinemanMain extends GuiConfigsBase {
             this.addButton(btn, new TabListener(tab));
             x += w + 2;
         }
-
-        int pauseWidth = this.getStringWidth(pauseButtonLabel()) + 14;
-        ButtonGeneric pauseButton = new ButtonGeneric(
-                GuiUtils.getScaledWindowWidth() - pauseWidth - 10, y, pauseWidth, 20, pauseButtonLabel());
-        this.addButton(pauseButton, (btn, mouseButton) -> {
-            MinemanPauseController.toggle();
-            btn.setDisplayString(pauseButtonLabel());
-        });
-
-        String cancelLabel = "Cancel";
-        int cancelWidth = this.getStringWidth(cancelLabel) + 14;
-        ButtonGeneric cancelButton = new ButtonGeneric(
-                GuiUtils.getScaledWindowWidth() - pauseWidth - cancelWidth - 12, y, cancelWidth, 20, cancelLabel);
-        this.addButton(cancelButton, (btn, mouseButton) -> {
-            MinemanCancelController.cancelAll();
-            pauseButton.setDisplayString(pauseButtonLabel());
-
-            if (this.mc.player != null) {
-                this.mc.player.displayClientMessage(Component.literal("Mineman: CANCELLED"), true);
-            }
-        });
-    }
-
-    private static String pauseButtonLabel() {
-        return MinemanPauseController.isPaused() ? "Mineman: §cPAUSED§r" : "Mineman: §aRUNNING§r";
     }
 
     @Override

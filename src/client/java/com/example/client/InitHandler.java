@@ -75,6 +75,26 @@ public class InitHandler implements IInitializationHandler {
             }
         );
 
+        Hotkeys.ITEM_ESP_TOGGLE.getKeybind().setCallback(
+            (action, key) -> {
+                Configs.Generic.ITEM_ESP.toggleBooleanValue();
+                boolean newValue = Configs.Generic.ITEM_ESP.getBooleanValue();
+                InfoUtils.printBooleanConfigToggleMessage(
+                    Configs.Generic.ITEM_ESP.getPrettyName(), newValue);
+                return true;
+            }
+        );
+
+        Hotkeys.BLOCK_ESP_TOGGLE.getKeybind().setCallback(
+            (action, key) -> {
+                Configs.Generic.BLOCK_ESP.toggleBooleanValue();
+                boolean newValue = Configs.Generic.BLOCK_ESP.getBooleanValue();
+                InfoUtils.printBooleanConfigToggleMessage(
+                    Configs.Generic.BLOCK_ESP.getPrettyName(), newValue);
+                return true;
+            }
+        );
+
         Hotkeys.SELECTION_SET_POS1.getKeybind().setCallback(
             (action, key) -> {
                 var player = Minecraft.getInstance().player;

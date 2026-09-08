@@ -23,6 +23,8 @@ public class Hotkeys {
     public static final ConfigHotkey OPEN_TASK_MANAGER                 = new ConfigHotkey("openTaskManager",            "").apply(HOTKEYS_KEY);
     public static final ConfigHotkey OPEN_STORAGE_POINTS               = new ConfigHotkey("openStoragePoints",         "").apply(HOTKEYS_KEY);
     public static final ConfigHotkey MUTE_ALL_SOUNDS_TOGGLE             = new ConfigHotkey("muteAllSoundsToggle",       "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey ITEM_ESP_TOGGLE                     = new ConfigHotkey("itemEspToggle",             "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey BLOCK_ESP_TOGGLE                    = new ConfigHotkey("blockEspToggle",            "").apply(HOTKEYS_KEY);
 
-    public static final List<ConfigHotkey> HOTKEY_LIST = ImmutableList.of(OPEN_GUI, AUTO_EAT_TOGGLE, EASY_EAT, MOVE_MATCHING_IGNORE_METADATA_TOGGLE, SELECTION_SET_POS1, SELECTION_SET_POS2, PAUSE_RESUME_TOGGLE, CANCEL_ALL_TASKS, STORAGE_SET_GOAL, STORAGE_GO_TO, STORAGE_STORE_ITEMS, STORAGE_CHEST_QUICK_DEPOSIT, OPEN_TASK_MANAGER, OPEN_STORAGE_POINTS, MUTE_ALL_SOUNDS_TOGGLE);
+    public static final List<ConfigHotkey> HOTKEY_LIST = ImmutableList.of(OPEN_GUI, AUTO_EAT_TOGGLE, EASY_EAT, MOVE_MATCHING_IGNORE_METADATA_TOGGLE, SELECTION_SET_POS1, SELECTION_SET_POS2, PAUSE_RESUME_TOGGLE, CANCEL_ALL_TASKS, STORAGE_SET_GOAL, STORAGE_GO_TO, STORAGE_STORE_ITEMS, STORAGE_CHEST_QUICK_DEPOSIT, OPEN_TASK_MANAGER, OPEN_STORAGE_POINTS, MUTE_ALL_SOUNDS_TOGGLE, ITEM_ESP_TOGGLE, BLOCK_ESP_TOGGLE);
 }

@@ -6,9 +6,12 @@ import fi.dy.masa.malilib.event.InitializationHandler;
 import com.example.client.compat.OpenContainerTracker;
 import com.example.client.compat.baritone.BaritoneController;
 import com.example.client.feature.ChestQuickDepositHandler;
+import com.example.client.feature.BlockEspHandler;
+import com.example.client.feature.BlockEspRenderHandler;
 import com.example.client.feature.ChestRuleOverlayRenderer;
 import com.example.client.feature.EasyEatHandler;
 import com.example.client.feature.HungryMinemanHandler;
+import com.example.client.feature.ItemEspRenderHandler;
 import com.example.client.feature.MissingToolCancelHandler;
 import com.example.client.feature.PauseIndicatorRenderHandler;
 import com.example.client.feature.SelectionToolHandler;
@@ -29,10 +32,13 @@ public class ExampleModClient implements ClientModInitializer {
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> SmartMinemanHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> ChestQuickDepositHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> MissingToolCancelHandler.onClientTick());
+		ClientTickEvents.START_CLIENT_TICK.register(mc -> BlockEspHandler.onClientTick());
 		SelectionToolHandler.register();
 		StoragePointRenderHandler.register();
 		PauseIndicatorRenderHandler.register();
 		ChestRuleOverlayRenderer.register();
 		StorageContentSnapshotter.register();
+		ItemEspRenderHandler.register();
+		BlockEspRenderHandler.register();
 	}
 }

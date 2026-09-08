@@ -30,5 +30,17 @@
   "mineman.config.generic.name.muteAllSounds": "muteAllSounds",
   "mineman.config.generic.comment.muteAllSounds": "Mutes all game sounds while enabled",
   "mineman.config.hotkeys.name.muteAllSoundsToggle": "muteAllSoundsToggle",
-  "mineman.config.hotkeys.comment.muteAllSoundsToggle": "Toggle muteAllSounds on/off"
+  "mineman.config.hotkeys.comment.muteAllSoundsToggle": "Toggle muteAllSounds on/off",
+  "mineman.config.generic.name.itemEsp": "itemEsp",
+  "mineman.config.generic.comment.itemEsp": "Renders a translucent green box around dropped items, visible through blocks",
+  "mineman.config.hotkeys.name.itemEspToggle": "itemEspToggle",
+  "mineman.config.hotkeys.comment.itemEspToggle": "Toggle itemEsp on/off",
+  "mineman.config.generic.name.blockEsp": "blockEsp",
+  "mineman.config.generic.comment.blockEsp": "Renders a translucent yellow box around nearby blockEspBlocks, visible through blocks",
+  "mineman.config.generic.name.blockEspBlocks": "blockEspBlocks",
+  "mineman.config.generic.comment.blockEspBlocks": "List of block IDs that blockEsp highlights. Example: minecraft:diamond_ore",
+  "mineman.config.generic.name.blockEspRadius": "blockEspRadius",
+  "mineman.config.generic.comment.blockEspRadius": "How far around the player (in blocks) blockEsp scans for matching blocks. Default: 24",
+  "mineman.config.hotkeys.name.blockEspToggle": "blockEspToggle",
+  "mineman.config.hotkeys.comment.blockEspToggle": "Toggle blockEsp on/off"
 }

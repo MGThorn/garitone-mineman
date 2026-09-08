@@ -41,7 +41,29 @@ public class Configs {
         public static final ConfigBoolean    HIDE_BARITONE_CHAT_FEEDBACK   = new ConfigBoolean("hideBaritoneChatFeedback", true).apply(GENERIC_KEY);
         public static final ConfigBoolean    ADVANCED_AUTO_STORE_MODUS     = new ConfigBoolean("advancedAutoStoreModus", true).apply(GENERIC_KEY);
         public static final ConfigBoolean    MUTE_ALL_SOUNDS               = new ConfigBoolean("muteAllSounds", false).apply(GENERIC_KEY);
+        public static final ConfigBoolean    ITEM_ESP                      = new ConfigBoolean("itemEsp", false).apply(GENERIC_KEY);
+        public static final ConfigBoolean    BLOCK_ESP                     = new ConfigBoolean("blockEsp", false).apply(GENERIC_KEY);
+        public static final ConfigStringList BLOCK_ESP_BLOCKS              = new ConfigStringList("blockEspBlocks", ImmutableList.of(
+                "minecraft:diamond_ore",
+                "minecraft:deepslate_diamond_ore",
+                "minecraft:ancient_debris",
+                "minecraft:emerald_ore",
+                "minecraft:deepslate_emerald_ore",
+                "minecraft:gold_ore",
+                "minecraft:deepslate_gold_ore",
+                "minecraft:nether_gold_ore",
+                "minecraft:iron_ore",
+                "minecraft:deepslate_iron_ore",
+                "minecraft:redstone_ore",
+                "minecraft:deepslate_redstone_ore",
+                "minecraft:lapis_ore",
+                "minecraft:deepslate_lapis_ore",
+                "minecraft:copper_ore",
+                "minecraft:deepslate_copper_ore",
+                "minecraft:nether_quartz_ore"
+        )).apply(GENERIC_KEY);
+        public static final ConfigInteger    BLOCK_ESP_RADIUS               = new ConfigInteger("blockEspRadius", 24, 4, 64, true).apply(GENERIC_KEY);
 
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS);
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS, ITEM_ESP, BLOCK_ESP, BLOCK_ESP_BLOCKS, BLOCK_ESP_RADIUS);
     }
 }
