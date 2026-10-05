@@ -10,6 +10,7 @@ import com.example.client.feature.BlockEspHandler;
 import com.example.client.feature.BlockEspRenderHandler;
 import com.example.client.feature.ChestRuleOverlayRenderer;
 import com.example.client.feature.EasyEatHandler;
+import com.example.client.feature.EntityEspRenderHandler;
 import com.example.client.feature.HungryMinemanHandler;
 import com.example.client.feature.ItemEspRenderHandler;
 import com.example.client.feature.MissingToolCancelHandler;
@@ -18,6 +19,7 @@ import com.example.client.feature.SelectionToolHandler;
 import com.example.client.feature.SmartMinemanHandler;
 import com.example.client.feature.StorageContentSnapshotter;
 import com.example.client.feature.StoragePointRenderHandler;
+import com.example.client.feature.ToolSwitchBackHandler;
 import com.example.client.storage.StorageContentIndex;
 
 public class ExampleModClient implements ClientModInitializer {
@@ -33,6 +35,7 @@ public class ExampleModClient implements ClientModInitializer {
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> ChestQuickDepositHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> MissingToolCancelHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> BlockEspHandler.onClientTick());
+		ClientTickEvents.START_CLIENT_TICK.register(mc -> ToolSwitchBackHandler.onClientTick());
 		SelectionToolHandler.register();
 		StoragePointRenderHandler.register();
 		PauseIndicatorRenderHandler.register();
@@ -40,5 +43,6 @@ public class ExampleModClient implements ClientModInitializer {
 		StorageContentSnapshotter.register();
 		ItemEspRenderHandler.register();
 		BlockEspRenderHandler.register();
+		EntityEspRenderHandler.register();
 	}
 }

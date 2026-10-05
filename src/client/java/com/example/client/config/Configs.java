@@ -63,7 +63,45 @@ public class Configs {
                 "minecraft:nether_quartz_ore"
         )).apply(GENERIC_KEY);
         public static final ConfigInteger    BLOCK_ESP_RADIUS               = new ConfigInteger("blockEspRadius", 24, 4, 64, true).apply(GENERIC_KEY);
+        public static final ConfigBoolean    ENTITY_ESP                     = new ConfigBoolean("entityEsp", false).apply(GENERIC_KEY);
+        public static final ConfigStringList ENTITY_ESP_ENTITIES            = new ConfigStringList("entityEspEntities", ImmutableList.of(
+                "minecraft:player",
+                "minecraft:zombie",
+                "minecraft:zombie_villager",
+                "minecraft:skeleton",
+                "minecraft:stray",
+                "minecraft:wither_skeleton",
+                "minecraft:creeper",
+                "minecraft:spider",
+                "minecraft:cave_spider",
+                "minecraft:enderman",
+                "minecraft:witch",
+                "minecraft:drowned",
+                "minecraft:husk",
+                "minecraft:phantom",
+                "minecraft:pillager",
+                "minecraft:vindicator",
+                "minecraft:evoker",
+                "minecraft:vex",
+                "minecraft:ravager",
+                "minecraft:blaze",
+                "minecraft:ghast",
+                "minecraft:slime",
+                "minecraft:magma_cube",
+                "minecraft:silverfish",
+                "minecraft:endermite",
+                "minecraft:guardian",
+                "minecraft:elder_guardian",
+                "minecraft:shulker",
+                "minecraft:piglin",
+                "minecraft:piglin_brute",
+                "minecraft:hoglin",
+                "minecraft:zoglin"
+        )).apply(GENERIC_KEY);
+        public static final ConfigBoolean    DISABLE_PUMPKIN_OVERLAY        = new ConfigBoolean("disablePumpkinOverlay", false).apply(GENERIC_KEY);
+        public static final ConfigBoolean    TOOL_SWITCH_BACK               = new ConfigBoolean("toolSwitchBack", false).apply(GENERIC_KEY);
+        public static final ConfigInteger    WEAPON_SWITCH_BACK_DELAY       = new ConfigInteger("weaponSwitchBackDelay", 20, 0, 200, true).apply(GENERIC_KEY);
 
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS, ITEM_ESP, BLOCK_ESP, BLOCK_ESP_BLOCKS, BLOCK_ESP_RADIUS);
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS, ITEM_ESP, BLOCK_ESP, BLOCK_ESP_BLOCKS, BLOCK_ESP_RADIUS, ENTITY_ESP, ENTITY_ESP_ENTITIES, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, WEAPON_SWITCH_BACK_DELAY);
     }
 }

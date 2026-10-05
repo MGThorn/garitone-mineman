@@ -95,6 +95,36 @@ public class InitHandler implements IInitializationHandler {
             }
         );
 
+        Hotkeys.ENTITY_ESP_TOGGLE.getKeybind().setCallback(
+            (action, key) -> {
+                Configs.Generic.ENTITY_ESP.toggleBooleanValue();
+                boolean newValue = Configs.Generic.ENTITY_ESP.getBooleanValue();
+                InfoUtils.printBooleanConfigToggleMessage(
+                    Configs.Generic.ENTITY_ESP.getPrettyName(), newValue);
+                return true;
+            }
+        );
+
+        Hotkeys.DISABLE_PUMPKIN_OVERLAY_TOGGLE.getKeybind().setCallback(
+            (action, key) -> {
+                Configs.Generic.DISABLE_PUMPKIN_OVERLAY.toggleBooleanValue();
+                boolean newValue = Configs.Generic.DISABLE_PUMPKIN_OVERLAY.getBooleanValue();
+                InfoUtils.printBooleanConfigToggleMessage(
+                    Configs.Generic.DISABLE_PUMPKIN_OVERLAY.getPrettyName(), newValue);
+                return true;
+            }
+        );
+
+        Hotkeys.TOOL_SWITCH_BACK_TOGGLE.getKeybind().setCallback(
+            (action, key) -> {
+                Configs.Generic.TOOL_SWITCH_BACK.toggleBooleanValue();
+                boolean newValue = Configs.Generic.TOOL_SWITCH_BACK.getBooleanValue();
+                InfoUtils.printBooleanConfigToggleMessage(
+                    Configs.Generic.TOOL_SWITCH_BACK.getPrettyName(), newValue);
+                return true;
+            }
+        );
+
         Hotkeys.SELECTION_SET_POS1.getKeybind().setCallback(
             (action, key) -> {
                 var player = Minecraft.getInstance().player;

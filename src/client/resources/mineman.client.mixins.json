@@ -9,10 +9,12 @@
 		"MixinAbstractContainerMenu",
 		"MixinChatComponent",
 		"MixinChatScreen",
+		"MixinGui",
 		"MixinItemScrollerSort",
 		"MixinMouseHandler",
 		"MixinMultiPlayerGameMode",
 		"MixinSoundManager",
+		"MixinTweakerooInventoryUtils",
 		"ItemScrollerInventoryUtilsInvoker"
 	],
 	"injectors": {

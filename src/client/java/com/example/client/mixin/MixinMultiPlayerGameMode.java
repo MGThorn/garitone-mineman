@@ -21,6 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.example.client.compat.OpenContainerTracker;
 import com.example.client.config.FillStrategy;
 import com.example.client.feature.ContainerDepositHelper;
+import com.example.client.feature.ToolSwitchBackHandler;
 import com.example.client.storage.StorageBlockEntry;
 import com.example.client.storage.StoragePointManager;
 
@@ -49,6 +50,12 @@ public class MixinMultiPlayerGameMode {
     private void mineman$captureInteractedBlock(LocalPlayer player, InteractionHand hand, BlockHitResult hitResult,
             CallbackInfoReturnable<InteractionResult> cir) {
         OpenContainerTracker.onBlockInteractAttempt(hitResult.getBlockPos());
+    }
+
+    @Inject(method = "handleInventoryMouseClick", at = @At("HEAD"))
+    private void mineman$trackToolSwitchClicks(int containerId, int slotId, int mouseButton,
+            ClickType clickType, Player player, CallbackInfo ci) {
+        ToolSwitchBackHandler.onInventoryClick(containerId, slotId, mouseButton, clickType);
     }
 
     @Inject(method = "handleInventoryMouseClick", at = @At("HEAD"), cancellable = true)

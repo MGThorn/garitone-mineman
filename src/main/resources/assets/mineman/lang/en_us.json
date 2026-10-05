@@ -42,5 +42,21 @@
   "mineman.config.generic.name.blockEspRadius": "blockEspRadius",
   "mineman.config.generic.comment.blockEspRadius": "How far around the player (in blocks) blockEsp scans for matching blocks. Default: 24",
   "mineman.config.hotkeys.name.blockEspToggle": "blockEspToggle",
-  "mineman.config.hotkeys.comment.blockEspToggle": "Toggle blockEsp on/off"
+  "mineman.config.hotkeys.comment.blockEspToggle": "Toggle blockEsp on/off",
+  "mineman.config.generic.name.entityEsp": "entityEsp",
+  "mineman.config.generic.comment.entityEsp": "Renders a translucent box around every loaded entity whose type is in entityEspEntities, visible through blocks. Dropped items are never shown here - use itemEsp for those. Each entity type gets its own color",
+  "mineman.config.generic.name.entityEspEntities": "entityEspEntities",
+  "mineman.config.generic.comment.entityEspEntities": "List of entity type IDs that entityEsp highlights. Example: minecraft:zombie",
+  "mineman.config.hotkeys.name.entityEspToggle": "entityEspToggle",
+  "mineman.config.hotkeys.comment.entityEspToggle": "Toggle entityEsp on/off",
+  "mineman.config.generic.name.disablePumpkinOverlay": "disablePumpkinOverlay",
+  "mineman.config.generic.comment.disablePumpkinOverlay": "Stops the pumpkin blur overlay from rendering while wearing a carved pumpkin on your head",
+  "mineman.config.hotkeys.name.disablePumpkinOverlayToggle": "disablePumpkinOverlayToggle",
+  "mineman.config.hotkeys.comment.disablePumpkinOverlayToggle": "Toggle disablePumpkinOverlay on/off",
+  "mineman.config.generic.name.toolSwitchBack": "toolSwitchBack",
+  "mineman.config.generic.comment.toolSwitchBack": "When left-click is released, undoes what Tweakeroo's tweakToolSwitch and tweakWeaponSwitch did: tools and weapons they pulled into the hotbar go back to their inventory slots and the previously selected slot is selected again. Tools replaced by tweakSwapAlmostBrokenTools are not swapped back in",
+  "mineman.config.generic.name.weaponSwitchBackDelay": "weaponSwitchBackDelay",
+  "mineman.config.generic.comment.weaponSwitchBackDelay": "Ticks (20 = 1 second) toolSwitchBack waits after releasing left-click before putting a weapon away. Switching items resets the attack cooldown, so this keeps the weapon in hand while you keep hitting. Tools are always put back right away. Default: 20",
+  "mineman.config.hotkeys.name.toolSwitchBackToggle": "toolSwitchBackToggle",
+  "mineman.config.hotkeys.comment.toolSwitchBackToggle": "Toggle toolSwitchBack on/off"
 }
