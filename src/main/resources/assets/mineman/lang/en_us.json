@@ -16,7 +16,7 @@
   "mineman.config.generic.name.advancedAutoStoreModus": "advancedAutoStoreModus",
   "mineman.config.generic.comment.advancedAutoStoreModus": "Enabled: Quick Deposit first checks each storage block's last-known contents and opens whichever one looks best able to take your current inventory, in one attempt. Disabled: no guessing - it just tries every usable storage block in order, starting with the first, opening and depositing into each one in turn, and keeps going until either your inventory has nothing left to deposit (ignoring quickDepositDisabledSlots) or every storage block has been tried.",
   "mineman.config.hotkeys.name.openGuiMainMenu": "openGuiMainMenu",
-  "mineman.config.hotkeys.comment.openGuiMainMenu": "open in-game mineman config GUI",
+  "mineman.config.hotkeys.comment.openGuiMainMenu": "Open the Garitone Mineman menu",
   "mineman.config.hotkeys.name.autoEatToggle": "autoEatToggle",
   "mineman.config.hotkeys.comment.autoEatToggle": "Toggle the autoEat feature on/off",
   "mineman.config.hotkeys.name.easyEat": "easyEat",
