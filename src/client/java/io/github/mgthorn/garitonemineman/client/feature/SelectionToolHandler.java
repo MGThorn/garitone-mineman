@@ -1,6 +1,7 @@
 package io.github.mgthorn.garitonemineman.client.feature;
 
 import org.jetbrains.annotations.Nullable;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -13,7 +14,6 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.render.RenderUtils;
 import fi.dy.masa.malilib.util.data.Color4f;
@@ -36,6 +36,7 @@ public class SelectionToolHandler {
     private static final Color4f COLOR_EDGE_X = new Color4f(1f, 0.15f, 0.15f, 1f);
     private static final Color4f COLOR_EDGE_Y = new Color4f(0.15f, 1f, 0.15f, 1f);
     private static final Color4f COLOR_EDGE_Z = new Color4f(0.3f, 0.5f, 1f, 1f);
+    private static final float SELECTION_LINE_WIDTH = 2f;
     private static final Color4f COLOR_WALLS = new Color4f(1f, 1f, 1f, 0.2f);
     private static final Color4f GLOW_POS1 = new Color4f(1f, 0.15f, 0.15f, 0.4f);
     private static final Color4f GLOW_POS2 = new Color4f(0.15f, 0.4f, 1f, 0.4f);
@@ -44,28 +45,74 @@ public class SelectionToolHandler {
     @Nullable private static BlockPos pos2;
     @Nullable private static Corner lastSelectedCorner;
 
-    public static void register() {
-        LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(ctx -> {
-            if (pos1 != null && pos2 != null) {
-                RenderUtils.renderAreaOutline(pos1, pos2, 2f, COLOR_EDGE_X, COLOR_EDGE_Y, COLOR_EDGE_Z);
-                RenderUtils.renderAreaSides(pos1, pos2, COLOR_WALLS);
-            }
+    /** Adds the selection's outline (one color per axis, visible through walls) to {@link MinemanWorldRenderer}'s batch. */
+    public static boolean addAreaOutline(BufferBuilder buffer, Vec3 cameraPos) {
+        if (pos1 == null || pos2 == null) {
+            return false;
+        }
 
-            if (pos1 != null) {
-                RenderUtils.renderBlockOutline(pos1, 0.002f, 2f, COLOR_POS1);
-            }
+        float minX = (float) (Math.min(pos1.getX(), pos2.getX()) - cameraPos.x);
+        float minY = (float) (Math.min(pos1.getY(), pos2.getY()) - cameraPos.y);
+        float minZ = (float) (Math.min(pos1.getZ(), pos2.getZ()) - cameraPos.z);
+        float maxX = (float) (Math.max(pos1.getX(), pos2.getX()) + 1 - cameraPos.x);
+        float maxY = (float) (Math.max(pos1.getY(), pos2.getY()) + 1 - cameraPos.y);
+        float maxZ = (float) (Math.max(pos1.getZ(), pos2.getZ()) + 1 - cameraPos.z);
 
-            if (pos2 != null) {
-                RenderUtils.renderBlockOutline(pos2, 0.002f, 2f, COLOR_POS2);
-            }
+        // The four edges along each axis
+        for (int i = 0; i < 4; i++) {
+            float y = (i & 1) == 0 ? minY : maxY;
+            float z = (i & 2) == 0 ? minZ : maxZ;
+            addLine(buffer, minX, y, z, maxX, y, z, COLOR_EDGE_X);
+        }
 
-            BlockPos lastPos = lastSelectedCorner == Corner.POS1 ? pos1 : lastSelectedCorner == Corner.POS2 ? pos2 : null;
+        for (int i = 0; i < 4; i++) {
+            float x = (i & 1) == 0 ? minX : maxX;
+            float z = (i & 2) == 0 ? minZ : maxZ;
+            addLine(buffer, x, minY, z, x, maxY, z, COLOR_EDGE_Y);
+        }
 
-            if (lastPos != null) {
-                Color4f glowColor = lastSelectedCorner == Corner.POS1 ? GLOW_POS1 : GLOW_POS2;
-                RenderUtils.renderAreaSides(lastPos, lastPos, glowColor);
-            }
-        });
+        for (int i = 0; i < 4; i++) {
+            float x = (i & 1) == 0 ? minX : maxX;
+            float y = (i & 2) == 0 ? minY : maxY;
+            addLine(buffer, x, y, minZ, x, y, maxZ, COLOR_EDGE_Z);
+        }
+
+        return true;
+    }
+
+    private static void addLine(BufferBuilder buffer, float x1, float y1, float z1, float x2, float y2, float z2, Color4f color) {
+        buffer.addVertex(x1, y1, z1).setColor(color.r, color.g, color.b, color.a).setLineWidth(SELECTION_LINE_WIDTH);
+        buffer.addVertex(x2, y2, z2).setColor(color.r, color.g, color.b, color.a).setLineWidth(SELECTION_LINE_WIDTH);
+    }
+
+    /** Adds the pos1/pos2 block outlines (hidden behind blocks) to {@link MinemanWorldRenderer}'s batch. */
+    public static boolean addCornerOutlines(BufferBuilder buffer) {
+        if (pos1 != null) {
+            RenderUtils.drawBlockBoundingBoxOutlinesBatchedLinesSimple(pos1, COLOR_POS1, 0.002, SELECTION_LINE_WIDTH, buffer);
+        }
+
+        if (pos2 != null) {
+            RenderUtils.drawBlockBoundingBoxOutlinesBatchedLinesSimple(pos2, COLOR_POS2, 0.002, SELECTION_LINE_WIDTH, buffer);
+        }
+
+        return pos1 != null || pos2 != null;
+    }
+
+    /**
+     * Renders the selection's translucent walls and the last-selected corner's glow. Left to MaLiLib, since
+     * it picks the depth pipeline depending on whether the camera is inside the box. At most two draws per frame.
+     */
+    public static void renderSides() {
+        if (pos1 != null && pos2 != null) {
+            RenderUtils.renderAreaSides(pos1, pos2, COLOR_WALLS);
+        }
+
+        BlockPos lastPos = lastSelectedCorner == Corner.POS1 ? pos1 : lastSelectedCorner == Corner.POS2 ? pos2 : null;
+
+        if (lastPos != null) {
+            Color4f glowColor = lastSelectedCorner == Corner.POS1 ? GLOW_POS1 : GLOW_POS2;
+            RenderUtils.renderAreaSides(lastPos, lastPos, glowColor);
+        }
     }
 
     /**

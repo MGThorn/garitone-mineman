@@ -2,21 +2,19 @@ package io.github.mgthorn.garitonemineman.client.feature;
 
 import java.util.List;
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.core.BlockPos;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import fi.dy.masa.malilib.render.MaLiLibPipelines;
-import fi.dy.masa.malilib.render.RenderContext;
+import net.minecraft.world.phys.Vec3;
 import fi.dy.masa.malilib.render.RenderUtils;
 import fi.dy.masa.malilib.util.data.Color4f;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
 
 /**
- * Renders each storage point's selection area and origin while its "Rendering" toggle is on:
- * a thin white outline around the selection area, and a thin green outline around the origin.
- * Also renders the currently highlighted storage block(s) (see {@link StorageBlockHighlightController}),
- * if any, as a solid translucent red box covering every side, visible through walls.
+ * Adds each enabled storage point's selection area and origin to {@link MinemanWorldRenderer}'s batches:
+ * a thin white outline around the selection area (visible through walls), and a thin green outline
+ * around the origin. Also adds the currently highlighted storage block(s) (see
+ * {@link StorageBlockHighlightController}), if any, as a solid translucent red box covering every side,
+ * visible through walls.
  */
 public class StoragePointRenderHandler {
     private static final float LINE_WIDTH = 1f;
@@ -25,52 +23,58 @@ public class StoragePointRenderHandler {
 
     private static final Color4f COLOR_HIGHLIGHT = new Color4f(1f, 0f, 0f, 0.35f);
 
-    public static void register() {
-        LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(ctx -> {
-            for (StoragePoint point : StoragePointManager.getInstance().getStoragePoints()) {
-                if (point.isEnabled() == false) {
-                    continue;
-                }
+    public static boolean addAreaOutlines(BufferBuilder buffer, Vec3 cameraPos) {
+        boolean any = false;
 
-                BlockPos corner1 = new BlockPos(point.getCorner1X(), point.getCorner1Y(), point.getCorner1Z());
-                BlockPos corner2 = new BlockPos(point.getCorner2X(), point.getCorner2Y(), point.getCorner2Z());
-                RenderUtils.renderAreaOutline(corner1, corner2, LINE_WIDTH, COLOR_AREA, COLOR_AREA, COLOR_AREA);
-
-                BlockPos origin = new BlockPos(point.getX(), point.getY(), point.getZ());
-                RenderUtils.renderBlockOutline(origin, 0.002f, LINE_WIDTH, COLOR_ORIGIN);
+        for (StoragePoint point : StoragePointManager.getInstance().getStoragePoints()) {
+            if (point.isEnabled() == false) {
+                continue;
             }
 
-            List<BlockPos> highlighted = StorageBlockHighlightController.getHighlightedPositions();
+            int minX = Math.min(point.getCorner1X(), point.getCorner2X());
+            int minY = Math.min(point.getCorner1Y(), point.getCorner2Y());
+            int minZ = Math.min(point.getCorner1Z(), point.getCorner2Z());
+            int maxX = Math.max(point.getCorner1X(), point.getCorner2X()) + 1;
+            int maxY = Math.max(point.getCorner1Y(), point.getCorner2Y()) + 1;
+            int maxZ = Math.max(point.getCorner1Z(), point.getCorner2Z()) + 1;
 
-            if (highlighted != null) {
-                for (BlockPos pos : highlighted) {
-                    renderSolidBoxThroughWalls(pos, COLOR_HIGHLIGHT);
-                }
-            }
-        });
+            RenderUtils.drawBoxAllEdgesBatchedLines(
+                    (float) (minX - cameraPos.x), (float) (minY - cameraPos.y), (float) (minZ - cameraPos.z),
+                    (float) (maxX - cameraPos.x), (float) (maxY - cameraPos.y), (float) (maxZ - cameraPos.z),
+                    COLOR_AREA, LINE_WIDTH, buffer);
+            any = true;
+        }
+
+        return any;
     }
 
-    /** Renders a solid, translucent box over every side of {@code pos}, visible through walls. */
-    private static void renderSolidBoxThroughWalls(BlockPos pos, Color4f color) {
-        RenderContext ctx = new RenderContext(
-                () -> "mineman:storageBlockHighlight", MaLiLibPipelines.POSITION_COLOR_TRANSLUCENT_NO_DEPTH_NO_CULL, 0);
-        BufferBuilder buffer = ctx.getBuilder();
+    public static boolean addOriginOutlines(BufferBuilder buffer) {
+        boolean any = false;
 
-        RenderUtils.renderAreaSidesBatched(pos, pos, color, 0.002, buffer);
-
-        try {
-            MeshData meshData = buffer.build();
-
-            if (meshData != null) {
-                ctx.upload(meshData, false);
-                meshData.close();
-                ctx.drawPost();
+        for (StoragePoint point : StoragePointManager.getInstance().getStoragePoints()) {
+            if (point.isEnabled() == false) {
+                continue;
             }
 
-            ctx.close();
+            BlockPos origin = new BlockPos(point.getX(), point.getY(), point.getZ());
+            RenderUtils.drawBlockBoundingBoxOutlinesBatchedLinesSimple(origin, COLOR_ORIGIN, 0.002, LINE_WIDTH, buffer);
+            any = true;
         }
-        catch (Exception err) {
-            // Rendering exceptions here shouldn't crash the frame, mirroring RenderUtils' own methods.
+
+        return any;
+    }
+
+    public static boolean addHighlights(BufferBuilder buffer) {
+        List<BlockPos> highlighted = StorageBlockHighlightController.getHighlightedPositions();
+
+        if (highlighted == null || highlighted.isEmpty()) {
+            return false;
         }
+
+        for (BlockPos pos : highlighted) {
+            RenderUtils.renderAreaSidesBatched(pos, pos, COLOR_HIGHLIGHT, 0.002, buffer);
+        }
+
+        return true;
     }
 }

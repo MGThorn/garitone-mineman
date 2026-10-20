@@ -5,17 +5,28 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 
 /**
  * Periodically scans a cube around the player for blocks whose registry ID is in
  * {@link Configs.Generic#BLOCK_ESP_BLOCKS}, within {@link Configs.Generic#BLOCK_ESP_RADIUS}.
- * The scan is throttled (rather than run every frame) since it walks every block in the volume;
+ * The scan is throttled (rather than run every frame) since it can cover up to 129³ blocks;
  * {@link BlockEspRenderHandler} renders the cached result every frame.
+ *
+ * To keep the scan cheap it walks chunk sections directly: sections that are all air, or whose palette
+ * can't contain any wanted block ({@link LevelChunkSection#maybeHas}), are skipped without looking at a
+ * single block, and blocks are compared as {@link Block} objects (resolved once from the configured IDs)
+ * instead of building a registry ID string per block.
  */
 public final class BlockEspHandler {
     private BlockEspHandler() {}
@@ -25,6 +36,10 @@ public final class BlockEspHandler {
 
     private static List<BlockPos> matches = List.of();
     private static int ticksUntilRescan = 0;
+
+    // The configured IDs resolved to blocks, rebuilt only when the list changes
+    private static List<String> cachedIds = List.of();
+    private static Set<Block> wantedBlocks = Set.of();
 
     public static void onClientTick() {
         if (!Configs.Generic.BLOCK_ESP.getBooleanValue()) {
@@ -47,42 +62,89 @@ public final class BlockEspHandler {
         return matches;
     }
 
+    private static Set<Block> resolveWantedBlocks() {
+        List<String> ids = Configs.Generic.BLOCK_ESP_BLOCKS.getStrings();
+
+        if (!ids.equals(cachedIds)) {
+            Set<Block> blocks = new HashSet<>();
+
+            for (String id : ids) {
+                Identifier key = Identifier.tryParse(id.trim());
+
+                if (key != null) {
+                    BuiltInRegistries.BLOCK.getOptional(key).ifPresent(blocks::add);
+                }
+            }
+
+            cachedIds = List.copyOf(ids);
+            wantedBlocks = blocks;
+        }
+
+        return wantedBlocks;
+    }
+
     private static void rescan() {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
-        Level level = mc.level;
+        ClientLevel level = mc.level;
 
         if (player == null || level == null) {
             matches = List.of();
             return;
         }
 
-        Set<String> wantedBlocks = new HashSet<>(Configs.Generic.BLOCK_ESP_BLOCKS.getStrings());
+        Set<Block> wanted = resolveWantedBlocks();
 
-        if (wantedBlocks.isEmpty()) {
+        if (wanted.isEmpty()) {
             matches = List.of();
             return;
         }
 
+        boolean wantsAir = wanted.contains(Blocks.AIR) || wanted.contains(Blocks.CAVE_AIR) || wanted.contains(Blocks.VOID_AIR);
         int radius = Configs.Generic.BLOCK_ESP_RADIUS.getIntegerValue();
         BlockPos center = player.blockPosition();
-        BlockPos min = center.offset(-radius, -radius, -radius);
-        BlockPos max = center.offset(radius, radius, radius);
+        int minX = center.getX() - radius;
+        int maxX = center.getX() + radius;
+        int minY = Math.max(center.getY() - radius, level.getMinY());
+        int maxY = Math.min(center.getY() + radius, level.getMaxY());
+        int minZ = center.getZ() - radius;
+        int maxZ = center.getZ() + radius;
 
         List<BlockPos> found = new ArrayList<>();
 
-        for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
-            if (!level.isLoaded(pos)) {
-                continue;
-            }
+        scan:
+        for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
+            for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
+                LevelChunk chunk = level.getChunkSource().getChunk(cx, cz, ChunkStatus.FULL, false);
 
-            String blockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()).toString();
+                if (chunk == null) {
+                    continue;
+                }
 
-            if (wantedBlocks.contains(blockId)) {
-                found.add(pos.immutable());
+                for (int sy = minY >> 4; sy <= maxY >> 4; sy++) {
+                    LevelChunkSection section = chunk.getSection(level.getSectionIndexFromSectionY(sy));
 
-                if (found.size() >= MAX_MATCHES) {
-                    break;
+                    if ((section.hasOnlyAir() && !wantsAir) || !section.maybeHas(state -> wanted.contains(state.getBlock()))) {
+                        continue;
+                    }
+
+                    int x0 = Math.max(minX, cx << 4), x1 = Math.min(maxX, (cx << 4) + 15);
+                    int y0 = Math.max(minY, sy << 4), y1 = Math.min(maxY, (sy << 4) + 15);
+                    int z0 = Math.max(minZ, cz << 4), z1 = Math.min(maxZ, (cz << 4) + 15);
+
+                    for (int y = y0; y <= y1; y++) {
+                        for (int z = z0; z <= z1; z++) {
+                            for (int x = x0; x <= x1; x++) {
+                                if (wanted.contains(section.getBlockState(x & 15, y & 15, z & 15).getBlock())) {
+                                    found.add(new BlockPos(x, y, z));
+
+                                    if (found.size() >= MAX_MATCHES) {
+                                        break scan;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
