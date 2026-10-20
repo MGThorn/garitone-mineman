@@ -3,19 +3,42 @@ plugins {
 	id 'maven-publish'
 }
 
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = "${project.name}-${project.minecraft_version}"
+}
+
 repositories {
 	// Add repositories to retrieve artifacts from in here.
 	// You should only use this when depending on other mods because
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
 	// for more information about repositories.
+	maven {
+		url = "https://masa.dy.fi/maven/sakura-ryoko"
+		content { includeGroupAndSubgroups("fi.dy.masa") }
+	}
+	maven {
+		url = "https://maven.fallenbreath.me/releases"
+		content { includeGroupAndSubgroups("me.fallenbreath") }
+	}
+	maven {
+		url = "https://maven.terraformersmc.com/releases/"
+		content { includeGroupAndSubgroups("com.terraformersmc") }
+	}
+	maven {
+		url = "https://babbaj.github.io/maven/"
+		content { includeGroup("dev.babbaj") }
+	}
 }
 
 loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"modid" {
+		"mineman" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -29,6 +52,24 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	implementation "fi.dy.masa.malilib:malilib-fabric-${project.minecraft_version}:${project.malilib_version}"
+
+	// Optional integrations: compiled against, present in runClient, but not required by fabric.mod.json
+	compileOnly "fi.dy.masa.itemscroller:itemscroller-fabric-${project.minecraft_version}:${project.itemscroller_version}"
+	localRuntime "fi.dy.masa.itemscroller:itemscroller-fabric-${project.minecraft_version}:${project.itemscroller_version}"
+	compileOnly "fi.dy.masa.tweakeroo:tweakeroo-fabric-${project.minecraft_version}:${project.tweakeroo_version}"
+	localRuntime "fi.dy.masa.tweakeroo:tweakeroo-fabric-${project.minecraft_version}:${project.tweakeroo_version}"
+	localRuntime "fi.dy.masa.litematica:litematica-fabric-${project.minecraft_version}:${project.litematica_version}"
+	localRuntime "fi.dy.masa.minihud:minihud-fabric-${project.minecraft_version}:${project.minihud_version}"
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	localRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	// Baritone — from the CI artifact of the 26.3 branch: https://github.com/cabaletta/baritone/actions/runs/35786839518
+	// Download the ZIP, extract baritone-standalone-fabric-*.jar, place it in libs/, then sync Gradle.
+	compileOnly fileTree(dir: 'libs', include: 'baritone-standalone-fabric-*.jar')
+	localRuntime fileTree(dir: 'libs', include: 'baritone-standalone-fabric-*.jar')
+	localRuntime "dev.babbaj:nether-pathfinder:1.6"
 }
 
 processResources {

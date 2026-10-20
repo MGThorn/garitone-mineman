@@ -1,0 +1,26 @@
+{
+	"required": true,
+	"package": "io.github.mgthorn.garitonemineman.client.mixin",
+	"plugin": "io.github.mgthorn.garitonemineman.client.mixin.MinemanMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"AbstractContainerScreenAccessor",
+		"InventoryAccessor",
+		"MixinAbstractContainerMenu",
+		"MixinChatComponent",
+		"MixinChatScreen",
+		"MixinGui",
+		"MixinItemScrollerSort",
+		"MixinMouseHandler",
+		"MixinMultiPlayerGameMode",
+		"MixinSoundManager",
+		"MixinTweakerooInventoryUtils",
+		"ItemScrollerInventoryUtilsInvoker"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

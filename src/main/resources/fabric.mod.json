@@ -1,31 +1,31 @@
 {
 	"schemaVersion": 1,
-	"id": "modid",
+	"id": "mineman",
 	"version": "${version}",
-	"name": "Example Mod",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "Garitone Mineman",
+	"description": "Client-side mining assistant built on Baritone and MaLiLib: mining tasks, storage points, auto eat, ESP and inventory tools.",
 	"authors": [
-		"Me!"
+		"MGThorn"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/MGThorn/garitone-mineman",
+		"sources": "https://github.com/MGThorn/garitone-mineman",
+		"issues": "https://github.com/MGThorn/garitone-mineman/issues"
 	},
-	"license": "CC0-1.0",
-	"icon": "assets/modid/icon.png",
-	"environment": "*",
+	"license": "LGPL-3.0-only",
+	"icon": "assets/mineman/icon.png",
+	"environment": "client",
 	"entrypoints": {
-		"main": [
-			"com.example.ExampleMod"
-		],
 		"client": [
-			"com.example.client.ExampleModClient"
+			"io.github.mgthorn.garitonemineman.client.GaritoneMinemanClient"
+		],
+		"modmenu": [
+			"io.github.mgthorn.garitonemineman.client.compat.modmenu.ModMenuImpl"
 		]
 	},
 	"mixins": [
-		"modid.mixins.json",
 		{
-			"config": "modid.client.mixins.json",
+			"config": "mineman.client.mixins.json",
 			"environment": "client"
 		}
 	],
@@ -33,6 +33,18 @@
 		"fabricloader": ">=0.19.5",
 		"minecraft": "~26.3",
 		"java": ">=25",
-		"fabric-api": "*"
+		"fabric-api": "*",
+		"malilib": ">=0.30.2"
+	},
+	"suggests": {
+		"itemscroller": ">=0.33.1",
+		"tweakeroo": ">=0.30.1",
+		"litematica": ">=0.29.1",
+		"minihud": ">=0.41.2",
+		"modmenu": ">=21.0.0"
+	},
+	"breaks": {
+		"itemscroller": "<0.33.1",
+		"tweakeroo": "<0.30.1"
 	}
 }
