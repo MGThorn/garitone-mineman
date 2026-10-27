@@ -1,8 +1,10 @@
 package io.github.mgthorn.garitonemineman.client.feature;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -15,6 +17,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import fi.dy.masa.malilib.util.data.Color4f;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 
 /**
@@ -34,12 +37,19 @@ public final class BlockEspHandler {
     private static final int RESCAN_INTERVAL_TICKS = 20;
     private static final int MAX_MATCHES = 2000;
 
-    private static List<BlockPos> matches = List.of();
+    public record Match(BlockPos pos, Block block) {}
+
+    private static List<Match> matches = List.of();
     private static int ticksUntilRescan = 0;
 
     // The configured IDs resolved to blocks, rebuilt only when the list changes
     private static List<String> cachedIds = List.of();
     private static Set<Block> wantedBlocks = Set.of();
+
+    // The per-block colors from the Block ESP picker, rebuilt only when they change
+    private static List<String> cachedColorEntries = List.of();
+    private static Map<Block, Color4f> blockColors = Map.of();
+    private static final Color4f DEFAULT_COLOR = Color4f.fromColor(EspColors.DEFAULT_BLOCK_COLOR);
 
     public static void onClientTick() {
         if (!Configs.Generic.BLOCK_ESP.getBooleanValue()) {
@@ -58,8 +68,29 @@ public final class BlockEspHandler {
         rescan();
     }
 
-    public static List<BlockPos> getMatches() {
+    public static List<Match> getMatches() {
         return matches;
+    }
+
+    public static Color4f getColor(Block block) {
+        List<String> entries = Configs.EspEditor.BLOCK_ESP_COLORS.getStrings();
+
+        if (!entries.equals(cachedColorEntries)) {
+            Map<Block, Color4f> colors = new HashMap<>();
+
+            EspColors.parse(entries).forEach((id, color) -> {
+                Identifier key = Identifier.tryParse(id);
+
+                if (key != null) {
+                    BuiltInRegistries.BLOCK.getOptional(key).ifPresent(b -> colors.put(b, Color4f.fromColor(color)));
+                }
+            });
+
+            cachedColorEntries = List.copyOf(entries);
+            blockColors = colors;
+        }
+
+        return blockColors.getOrDefault(block, DEFAULT_COLOR);
     }
 
     private static Set<Block> resolveWantedBlocks() {
@@ -110,7 +141,7 @@ public final class BlockEspHandler {
         int minZ = center.getZ() - radius;
         int maxZ = center.getZ() + radius;
 
-        List<BlockPos> found = new ArrayList<>();
+        List<Match> found = new ArrayList<>();
 
         scan:
         for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
@@ -135,8 +166,10 @@ public final class BlockEspHandler {
                     for (int y = y0; y <= y1; y++) {
                         for (int z = z0; z <= z1; z++) {
                             for (int x = x0; x <= x1; x++) {
-                                if (wanted.contains(section.getBlockState(x & 15, y & 15, z & 15).getBlock())) {
-                                    found.add(new BlockPos(x, y, z));
+                                Block block = section.getBlockState(x & 15, y & 15, z & 15).getBlock();
+
+                                if (wanted.contains(block)) {
+                                    found.add(new Match(new BlockPos(x, y, z), block));
 
                                     if (found.size() >= MAX_MATCHES) {
                                         break scan;

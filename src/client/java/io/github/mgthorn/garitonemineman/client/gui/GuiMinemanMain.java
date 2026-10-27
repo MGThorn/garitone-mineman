@@ -126,6 +126,14 @@ public class GuiMinemanMain extends GuiConfigsBase {
             GuiBase.openGui(new GuiInventorySortConfig(this));
             return;
         }
+        if (tab == Tab.BLOCK_ESP) {
+            GuiBase.openGui(new GuiBlockEspEditor(this));
+            return;
+        }
+        if (tab == Tab.ENTITY_ESP) {
+            GuiBase.openGui(new GuiEntityEspEditor(this));
+            return;
+        }
         this.activeTab = tab;
         this.clearElements();
         this.reCreateListWidget();
@@ -142,7 +150,12 @@ public class GuiMinemanMain extends GuiConfigsBase {
                 "Configure which item belongs in each of your inventory slots.",
                 "When Item Scroller's sortInventory hotkey is pressed, those slots",
                 "are filled in first (the best tool tier wins for tool slots),",
-                "then the rest of your inventory is sorted normally.");
+                "then the rest of your inventory is sorted normally."),
+        BLOCK_ESP("Block ESP",
+                "Pick the blocks that blockEsp highlights."),
+        ENTITY_ESP("Entity ESP",
+                "Pick the entities that entityEsp highlights.",
+                "Entity models are only shown while you're in a world.");
 
         final String displayName;
         final String[] hoverLines;

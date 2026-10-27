@@ -20,6 +20,7 @@ public class MinemanConfigHandler implements IConfigHandler {
             JsonObject root = element.getAsJsonObject();
             ConfigUtils.readConfigBase(root, "Generic", Configs.Generic.CONFIG_LIST);
             ConfigUtils.readHotkeys(root, "Hotkeys", Hotkeys.HOTKEY_LIST);
+            ConfigUtils.readConfigBase(root, "EspEditor", Configs.EspEditor.CONFIG_LIST);
         }
     }
 
@@ -29,6 +30,7 @@ public class MinemanConfigHandler implements IConfigHandler {
         JsonObject root = new JsonObject();
         ConfigUtils.writeConfigBase(root, "Generic", Configs.Generic.CONFIG_LIST);
         ConfigUtils.writeHotkeys(root, "Hotkeys", Hotkeys.HOTKEY_LIST);
+        ConfigUtils.writeConfigBase(root, "EspEditor", Configs.EspEditor.CONFIG_LIST);
         JsonUtils.writeJsonToFile(root, configFile);
     }
 }

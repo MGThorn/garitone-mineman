@@ -14,6 +14,7 @@ import io.github.mgthorn.garitonemineman.client.compat.TweakerooCompat;
 
 public class Configs {
     private static final String GENERIC_KEY = "mineman.config.generic";
+    private static final String ESP_EDITOR_KEY = "mineman.config.esp_editor";
 
     public static class Generic {
         public static final ConfigBoolean    AUTO_EAT                      = new ConfigBoolean("autoEat", false).apply(GENERIC_KEY);
@@ -116,5 +117,20 @@ public class Configs {
         public static final ConfigInteger    WEAPON_SWITCH_BACK_DELAY       = new ConfigInteger("weaponSwitchBackDelay", 20, 0, 200, true).apply(GENERIC_KEY);
 
         public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS, ITEM_ESP, BLOCK_ESP, BLOCK_ESP_BLOCKS, BLOCK_ESP_RADIUS, ENTITY_ESP, ENTITY_ESP_ENTITIES, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, WEAPON_SWITCH_BACK_DELAY);
+    }
+
+    /**
+     * Data of the Block ESP / Entity ESP picker screens. Saved with the other configs, but not shown in the config screen.
+     */
+    public static class EspEditor {
+        // "<block id>=#AARRGGBB" for every block with a color other than the default yellow
+        public static final ConfigStringList BLOCK_ESP_COLORS  = new ConfigStringList("blockEspColors", ImmutableList.of()).apply(ESP_EDITOR_KEY);
+        // The same for entity types, overriding the automatic per-type color
+        public static final ConfigStringList ENTITY_ESP_COLORS = new ConfigStringList("entityEspColors", ImmutableList.of()).apply(ESP_EDITOR_KEY);
+        // IDs in the order they were last picked, newest first; the picker grids show these first
+        public static final ConfigStringList BLOCK_ESP_RECENT  = new ConfigStringList("blockEspRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
+        public static final ConfigStringList ENTITY_ESP_RECENT = new ConfigStringList("entityEspRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
+
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(BLOCK_ESP_COLORS, ENTITY_ESP_COLORS, BLOCK_ESP_RECENT, ENTITY_ESP_RECENT);
     }
 }

@@ -24,11 +24,13 @@ import io.github.mgthorn.garitonemineman.client.config.Configs;
  * in {@link Configs.Generic#ENTITY_ESP_ENTITIES}) to {@link MinemanWorldRenderer}'s through-walls batch.
  * Dropped items are always excluded - that's {@link ItemEspRenderHandler}'s job. Each entity type is
  * assigned its own consistent color (derived from its registry ID), so different mobs/players can be told
- * apart at a glance. Range is whatever the client already has loaded - matches
+ * apart at a glance, unless a color was picked for it in the Entity ESP picker. Range is whatever the client already has loaded - matches
  * {@link net.minecraft.client.multiplayer.ClientLevel#entitiesForRendering()}, no extra radius cap.
  */
 public class EntityEspRenderHandler {
     private static final Map<EntityType<?>, Color4f> COLOR_CACHE = new HashMap<>();
+    // The colors picked in the Entity ESP picker; the cache is cleared when they change
+    private static List<String> cachedColorEntries = List.of();
 
     // The configured IDs resolved to entity types, rebuilt only when the list changes
     private static List<String> cachedIds = List.of();
@@ -104,14 +106,26 @@ public class EntityEspRenderHandler {
     }
 
     private static Color4f colorFor(EntityType<?> type) {
+        List<String> entries = Configs.EspEditor.ENTITY_ESP_COLORS.getStrings();
+
+        if (!entries.equals(cachedColorEntries)) {
+            cachedColorEntries = List.copyOf(entries);
+            COLOR_CACHE.clear();
+        }
+
         return COLOR_CACHE.computeIfAbsent(type, t -> {
-            int hash = BuiltInRegistries.ENTITY_TYPE.getKey(t).toString().hashCode();
-            float hue = (hash & 0x7fffffff) % 360 / 360f;
-            int rgb = Color.HSBtoRGB(hue, 0.75f, 1f);
-            float r = ((rgb >> 16) & 0xFF) / 255f;
-            float g = ((rgb >> 8) & 0xFF) / 255f;
-            float b = (rgb & 0xFF) / 255f;
-            return new Color4f(r, g, b, 0.45f);
+            String id = BuiltInRegistries.ENTITY_TYPE.getKey(t).toString();
+            return Color4f.fromColor(EspColors.get(Configs.EspEditor.ENTITY_ESP_COLORS, id, getDefaultColor(id)));
         });
+    }
+
+    /** The automatic color of an entity type: a hue derived from its registry ID, at 45 % opacity. */
+    public static int getDefaultColor(String id) {
+        float hue = (id.hashCode() & 0x7fffffff) % 360 / 360f;
+        int rgb = Color.HSBtoRGB(hue, 0.75f, 1f);
+        float r = ((rgb >> 16) & 0xFF) / 255f;
+        float g = ((rgb >> 8) & 0xFF) / 255f;
+        float b = (rgb & 0xFF) / 255f;
+        return new Color4f(r, g, b, 0.45f).intValue;
     }
 }

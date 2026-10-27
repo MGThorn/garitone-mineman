@@ -10,6 +10,7 @@
 		"MixinChatComponent",
 		"MixinChatScreen",
 		"MixinGui",
+		"MixinGuiRenderer",
 		"MixinItemScrollerSort",
 		"MixinMouseHandler",
 		"MixinMultiPlayerGameMode",

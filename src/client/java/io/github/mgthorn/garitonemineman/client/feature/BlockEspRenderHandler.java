@@ -2,27 +2,24 @@ package io.github.mgthorn.garitonemineman.client.feature;
 
 import java.util.List;
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import net.minecraft.core.BlockPos;
 import fi.dy.masa.malilib.render.RenderUtils;
-import fi.dy.masa.malilib.util.data.Color4f;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 
 /**
- * Adds a solid, translucent yellow box over every block matched by {@link BlockEspHandler} to
- * {@link MinemanWorldRenderer}'s through-walls batch.
+ * Adds a solid, translucent box over every block matched by {@link BlockEspHandler} to
+ * {@link MinemanWorldRenderer}'s through-walls batch. The color is yellow unless it was changed
+ * for that block in the Block ESP picker.
  */
 public class BlockEspRenderHandler {
-    private static final Color4f COLOR = new Color4f(1f, 0.85f, 0f, 0.4f);
-
     public static boolean addBoxes(BufferBuilder buffer) {
         if (!Configs.Generic.BLOCK_ESP.getBooleanValue()) {
             return false;
         }
 
-        List<BlockPos> matches = BlockEspHandler.getMatches();
+        List<BlockEspHandler.Match> matches = BlockEspHandler.getMatches();
 
-        for (BlockPos pos : matches) {
-            RenderUtils.renderAreaSidesBatched(pos, pos, COLOR, 0.002, buffer);
+        for (BlockEspHandler.Match match : matches) {
+            RenderUtils.renderAreaSidesBatched(match.pos(), match.pos(), BlockEspHandler.getColor(match.block()), 0.002, buffer);
         }
 
         return !matches.isEmpty();
