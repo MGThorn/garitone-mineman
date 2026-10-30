@@ -16,6 +16,7 @@ import fi.dy.masa.malilib.registry.Registry;
 import fi.dy.masa.malilib.util.GuiUtils;
 import fi.dy.masa.malilib.util.data.ModInfo;
 import io.github.mgthorn.garitonemineman.Reference;
+import io.github.mgthorn.garitonemineman.client.compat.JourneyMapCompat;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 import io.github.mgthorn.garitonemineman.client.config.Hotkeys;
 
@@ -41,7 +42,8 @@ public class GuiMinemanMain extends GuiConfigsBase {
             int w = this.getStringWidth(tab.displayName) + 12;
             ButtonGeneric btn = new ButtonGeneric(x, y, w, 20, tab.displayName, tab.hoverLines);
             boolean disabled = tab == this.activeTab
-                    || ((tab == Tab.STORAGE_POINTS || tab == Tab.TASK_MANAGER || tab == Tab.SORTING_SETTINGS) && this.mc.player == null);
+                    || ((tab == Tab.STORAGE_POINTS || tab == Tab.TASK_MANAGER || tab == Tab.SORTING_SETTINGS || tab == Tab.STRUCTURES) && this.mc.player == null)
+                    || (tab == Tab.STRUCTURES && !JourneyMapCompat.isLoaded());
             btn.setEnabled(!disabled);
             this.addButton(btn, new TabListener(tab));
             x += w + 2;
@@ -134,6 +136,13 @@ public class GuiMinemanMain extends GuiConfigsBase {
             GuiBase.openGui(new GuiEntityEspEditor(this));
             return;
         }
+        if (tab == Tab.STRUCTURES) {
+            if (this.mc.player == null || !JourneyMapCompat.isLoaded()) {
+                return;
+            }
+            GuiBase.openGui(new GuiStructureWaypoints(this));
+            return;
+        }
         this.activeTab = tab;
         this.clearElements();
         this.reCreateListWidget();
@@ -155,14 +164,20 @@ public class GuiMinemanMain extends GuiConfigsBase {
                 "Pick the blocks that blockEsp highlights."),
         ENTITY_ESP("Entity ESP",
                 "Pick the entities that entityEsp highlights.",
-                "Entity models are only shown while you're in a world.");
+                "Entity models are only shown while you're in a world."),
+        STRUCTURES("Structures",
+                "Create JourneyMap waypoints for structures, found from the world seed.",
+                "Needs to be in a world. The seed comes from MiniHUD,",
+                "singleplayer, or can be typed in on the screen.",
+                JourneyMapCompat.isLoaded() ? "" : GuiBase.TXT_RED + "JourneyMap is not installed" + GuiBase.TXT_RST);
 
         final String displayName;
         final String[] hoverLines;
 
         Tab(String displayName, String... hoverLines) {
             this.displayName = displayName;
-            this.hoverLines = hoverLines;
+            // Conditional lines (like the JourneyMap warning) are empty when they don't apply
+            this.hoverLines = java.util.Arrays.stream(hoverLines).filter(line -> !line.isEmpty()).toArray(String[]::new);
         }
     }
 

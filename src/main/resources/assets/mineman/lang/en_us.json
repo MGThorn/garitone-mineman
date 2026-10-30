@@ -56,6 +56,8 @@
   "mineman.config.generic.name.toolSwitchBack": "toolSwitchBack",
   "mineman.config.generic.comment.toolSwitchBack": "When left-click is released, undoes what Tweakeroo's tweakToolSwitch and tweakWeaponSwitch did: tools and weapons they pulled into the hotbar go back to their inventory slots and the previously selected slot is selected again. Tools replaced by tweakSwapAlmostBrokenTools are not swapped back in",
   "mineman.config.generic.name.weaponSwitchBackDelay": "weaponSwitchBackDelay",
+  "mineman.config.generic.name.structureSearchRadius": "structureSearchRadius",
+  "mineman.config.generic.comment.structureSearchRadius": "How far (in blocks) the Search button of the Structures screen looks for structures around you, in each dimension. Larger radii take longer. Default: 5000",
   "mineman.config.generic.comment.weaponSwitchBackDelay": "Ticks (20 = 1 second) toolSwitchBack waits after releasing left-click before putting a weapon away. Switching items resets the attack cooldown, so this keeps the weapon in hand while you keep hitting. Tools are always put back right away. Default: 20",
   "mineman.config.hotkeys.name.toolSwitchBackToggle": "toolSwitchBackToggle",
   "mineman.config.hotkeys.comment.toolSwitchBackToggle": "Toggle toolSwitchBack on/off",

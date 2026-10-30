@@ -32,6 +32,10 @@ repositories {
 		url = "https://babbaj.github.io/maven/"
 		content { includeGroup("dev.babbaj") }
 	}
+	maven {
+		url = "https://api.modrinth.com/maven"
+		content { includeGroup("maven.modrinth") }
+	}
 }
 
 loom {
@@ -43,6 +47,21 @@ loom {
 			sourceSet sourceSets.client
 		}
 	}
+}
+
+configurations {
+	journeymap { transitive = false }
+}
+
+def journeyMapApiDir = layout.buildDirectory.dir("journeymap-api")
+
+tasks.register('extractJourneyMapApi', Copy) {
+	from({ zipTree(configurations.journeymap.singleFile) }) {
+		include 'META-INF/jars/journeymap-api-*.jar'
+		eachFile { path = name }
+	}
+	includeEmptyDirs = false
+	into journeyMapApiDir
 }
 
 dependencies {
@@ -61,7 +80,12 @@ dependencies {
 	compileOnly "fi.dy.masa.tweakeroo:tweakeroo-fabric-${project.minecraft_version}:${project.tweakeroo_version}"
 	localRuntime "fi.dy.masa.tweakeroo:tweakeroo-fabric-${project.minecraft_version}:${project.tweakeroo_version}"
 	localRuntime "fi.dy.masa.litematica:litematica-fabric-${project.minecraft_version}:${project.litematica_version}"
+	compileOnly "fi.dy.masa.minihud:minihud-fabric-${project.minecraft_version}:${project.minihud_version}"
 	localRuntime "fi.dy.masa.minihud:minihud-fabric-${project.minecraft_version}:${project.minihud_version}"
+	// JourneyMap ships its API only inside the mod jar (JourneyMap's own maven stops at 26.2), so it's extracted below
+	journeymap "maven.modrinth:journeymap:${project.journeymap_version}"
+	compileOnly fileTree(dir: journeyMapApiDir, include: '*.jar').builtBy('extractJourneyMapApi')
+	localRuntime "maven.modrinth:journeymap:${project.journeymap_version}"
 	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 	localRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
 

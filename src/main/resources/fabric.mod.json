@@ -21,6 +21,9 @@
 		],
 		"modmenu": [
 			"io.github.mgthorn.garitonemineman.client.compat.modmenu.ModMenuImpl"
+		],
+		"journeymap": [
+			"io.github.mgthorn.garitonemineman.client.compat.journeymap.MinemanJourneyMapPlugin"
 		]
 	},
 	"mixins": [
@@ -41,7 +44,8 @@
 		"tweakeroo": ">=0.30.1",
 		"litematica": ">=0.29.1",
 		"minihud": ">=0.41.2",
-		"modmenu": ">=21.0.0"
+		"modmenu": ">=21.0.0",
+		"journeymap": ">=26.3-6.0.10"
 	},
 	"breaks": {
 		"itemscroller": "<0.33.1",
