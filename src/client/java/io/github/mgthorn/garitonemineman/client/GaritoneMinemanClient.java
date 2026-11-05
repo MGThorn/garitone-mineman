@@ -14,6 +14,8 @@ import io.github.mgthorn.garitonemineman.client.feature.HungryMinemanHandler;
 import io.github.mgthorn.garitonemineman.client.feature.MinemanWorldRenderer;
 import io.github.mgthorn.garitonemineman.client.feature.MissingToolCancelHandler;
 import io.github.mgthorn.garitonemineman.client.feature.PauseIndicatorRenderHandler;
+import io.github.mgthorn.garitonemineman.client.feature.SelectionHudRenderHandler;
+import io.github.mgthorn.garitonemineman.client.feature.SelectionToolHandler;
 import io.github.mgthorn.garitonemineman.client.feature.SmartMinemanHandler;
 import io.github.mgthorn.garitonemineman.client.feature.StorageContentSnapshotter;
 import io.github.mgthorn.garitonemineman.client.feature.ToolSwitchBackHandler;
@@ -34,9 +36,11 @@ public class GaritoneMinemanClient implements ClientModInitializer {
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> MissingToolCancelHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> BlockEspHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> ToolSwitchBackHandler.onClientTick());
+		ClientTickEvents.START_CLIENT_TICK.register(mc -> SelectionToolHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> StructureWaypointManager.getInstance().onClientTick());
 		RenderEventHandler.getInstance().registerWorldLastRenderer(new MinemanWorldRenderer());
 		PauseIndicatorRenderHandler.register();
+		SelectionHudRenderHandler.register();
 		ChestRuleOverlayRenderer.register();
 		StorageContentSnapshotter.register();
 	}

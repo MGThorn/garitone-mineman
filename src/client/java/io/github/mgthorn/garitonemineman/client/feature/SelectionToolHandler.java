@@ -3,6 +3,7 @@ package io.github.mgthorn.garitonemineman.client.feature;
 import org.jetbrains.annotations.Nullable;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -26,6 +27,11 @@ import io.github.mgthorn.garitonemineman.client.config.Configs;
  * selectionSetPos1/2 hotkeys, default BUTTON_1/BUTTON_2) instead of vanilla block-interaction events,
  * so it isn't limited by survival reach distance. Alt + scroll while holding the tool moves the
  * last-selected corner along the direction the player is looking, instead of changing the hotbar slot.
+ *
+ * Only the main hand counts as holding the tool, so flint in the offhand doesn't take over mining
+ * and placing. The selection belongs to the world (and dimension) it was made in: it's cleared on a
+ * dimension change, world change or disconnect ({@link #onClientTick()}). While the tool is held,
+ * {@link SelectionHudRenderHandler} shows the corners, the size and the block count.
  */
 public class SelectionToolHandler {
     private static final double MAX_DISTANCE = 1024.0;
@@ -44,6 +50,24 @@ public class SelectionToolHandler {
     @Nullable private static BlockPos pos1;
     @Nullable private static BlockPos pos2;
     @Nullable private static Corner lastSelectedCorner;
+    // The level the selection was made in; another level (dimension change, new world, disconnect) clears it
+    @Nullable private static ClientLevel selectionLevel;
+    // Ticks left to show "no block in range" in the HUD after a click into the air
+    private static int missTicks;
+    private static final int MISS_DISPLAY_TICKS = 40;
+
+    /** Call once per client tick. */
+    public static void onClientTick() {
+        Minecraft mc = Minecraft.getInstance();
+
+        if (missTicks > 0) {
+            missTicks--;
+        }
+
+        if (selectionLevel != null && mc.level != selectionLevel) {
+            clearSelection();
+        }
+    }
 
     /** Adds the selection's outline (one color per axis, visible through walls) to {@link MinemanWorldRenderer}'s batch. */
     public static boolean addAreaOutline(BufferBuilder buffer, Vec3 cameraPos) {
@@ -151,6 +175,10 @@ public class SelectionToolHandler {
         if (hit != null) {
             pos1 = hit;
             lastSelectedCorner = Corner.POS1;
+            selectionLevel = Minecraft.getInstance().level;
+        }
+        else {
+            missTicks = MISS_DISPLAY_TICKS;
         }
 
         return hit != null;
@@ -166,14 +194,18 @@ public class SelectionToolHandler {
         if (hit != null) {
             pos2 = hit;
             lastSelectedCorner = Corner.POS2;
+            selectionLevel = Minecraft.getInstance().level;
+        }
+        else {
+            missTicks = MISS_DISPLAY_TICKS;
         }
 
         return hit != null;
     }
 
-    private static boolean isHoldingFlint(Player player) {
-        Item tool = resolveToolItem();
-        return player.getMainHandItem().is(tool) || player.getOffhandItem().is(tool);
+    /** Main hand only: flint in the offhand must not take over the mining and placing clicks. */
+    public static boolean isHoldingFlint(Player player) {
+        return player.getMainHandItem().is(resolveToolItem());
     }
 
     private static Item resolveToolItem() {
@@ -257,9 +289,36 @@ public class SelectionToolHandler {
         return pos2;
     }
 
+    /** A click into the air (nothing within range) happened a moment ago. */
+    public static boolean hasRecentMiss() {
+        return missTicks > 0;
+    }
+
+    /** Blocks inside the selection, or 0 while a corner is missing. */
+    public static long getVolume() {
+        if (pos1 == null || pos2 == null) {
+            return 0;
+        }
+
+        return (long) getSizeX() * getSizeY() * getSizeZ();
+    }
+
+    public static int getSizeX() {
+        return pos1 == null || pos2 == null ? 0 : Math.abs(pos1.getX() - pos2.getX()) + 1;
+    }
+
+    public static int getSizeY() {
+        return pos1 == null || pos2 == null ? 0 : Math.abs(pos1.getY() - pos2.getY()) + 1;
+    }
+
+    public static int getSizeZ() {
+        return pos1 == null || pos2 == null ? 0 : Math.abs(pos1.getZ() - pos2.getZ()) + 1;
+    }
+
     public static void clearSelection() {
         pos1 = null;
         pos2 = null;
         lastSelectedCorner = null;
+        selectionLevel = null;
     }
 }
