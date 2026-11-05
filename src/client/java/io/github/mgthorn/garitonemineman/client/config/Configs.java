@@ -37,7 +37,6 @@ public class Configs {
         public static final ConfigBoolean    BERND_DAS_BROT                = new ConfigBoolean("berndDasBrot", false).apply(GENERIC_KEY);
         public static final ConfigString     SELECTION_TOOL_ITEM           = new ConfigString("selectionToolItem", "minecraft:flint").apply(GENERIC_KEY);
         public static final ConfigInteger    MAX_REGION_SIZE               = new ConfigInteger("maxRegionSize", 200_000, 1, 10_000_000, false).apply(GENERIC_KEY);
-        public static final ConfigOptionList FILL_STRATEGY                 = new ConfigOptionList("fillStrategy", FillStrategy.FIRST_AVAILABLE_SLOT).apply(GENERIC_KEY);
         public static final ConfigBoolean    SMART_MINEMAN                 = baritoneOption("smartMineman", false);
         public static final ConfigBoolean    HUNGRY_MINEMAN                = baritoneOption("hungryMineman", false);
         public static final ConfigInteger    SMART_MINEMAN_FREE_SLOTS_THRESHOLD = new ConfigInteger("smartMinemanFreeSlotsThreshold", 1, 0, 36, true).apply(GENERIC_KEY);
@@ -77,7 +76,37 @@ public class Configs {
                 "minecraft:waxed_weathered_copper_chest",
                 "minecraft:waxed_oxidized_copper_chest"
         )).apply(GENERIC_KEY);
-        public static final ConfigBoolean    ADVANCED_AUTO_STORE_MODUS     = new ConfigBoolean("advancedAutoStoreModus", true).apply(GENERIC_KEY);
+        // Blocks a storage point picks up as storage blocks when scanning its area (edited in its picker screen)
+        public static final ConfigStringList STORAGE_BLOCK_TYPES           = new ConfigStringList("storageBlockTypes", ImmutableList.of(
+                "minecraft:chest",
+                "minecraft:trapped_chest",
+                "minecraft:barrel",
+                "minecraft:shulker_box",
+                "minecraft:white_shulker_box",
+                "minecraft:orange_shulker_box",
+                "minecraft:magenta_shulker_box",
+                "minecraft:light_blue_shulker_box",
+                "minecraft:yellow_shulker_box",
+                "minecraft:lime_shulker_box",
+                "minecraft:pink_shulker_box",
+                "minecraft:gray_shulker_box",
+                "minecraft:light_gray_shulker_box",
+                "minecraft:cyan_shulker_box",
+                "minecraft:purple_shulker_box",
+                "minecraft:blue_shulker_box",
+                "minecraft:brown_shulker_box",
+                "minecraft:green_shulker_box",
+                "minecraft:red_shulker_box",
+                "minecraft:black_shulker_box",
+                "minecraft:copper_chest",
+                "minecraft:exposed_copper_chest",
+                "minecraft:weathered_copper_chest",
+                "minecraft:oxidized_copper_chest",
+                "minecraft:waxed_copper_chest",
+                "minecraft:waxed_exposed_copper_chest",
+                "minecraft:waxed_weathered_copper_chest",
+                "minecraft:waxed_oxidized_copper_chest"
+        )).apply(GENERIC_KEY);
         public static final ConfigBoolean    MUTE_ALL_SOUNDS               = new ConfigBoolean("muteAllSounds", false).apply(GENERIC_KEY);
         public static final ConfigBoolean    ITEM_ESP                      = new ConfigBoolean("itemEsp", false).apply(GENERIC_KEY);
         public static final ConfigBoolean    BLOCK_ESP                     = new ConfigBoolean("blockEsp", false).apply(GENERIC_KEY);
@@ -156,9 +185,8 @@ public class Configs {
         // Sorted by topic: Smart Mineman, Hungry Mineman, protection, auto eat. The slot lists and the auto eat
         // blacklist are edited in their own screens (buttons above the list), see HIDDEN.
         public static final List<IConfigBase> GARITONE = ImmutableList.of(SMART_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, HUNGRY_MINEMAN, PROTECT_STORAGE_POINTS, PROTECTED_STORAGE_BLOCKS, AUTO_EAT, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD);
-        // Saved, but not shown in any tab: edited in the slot picker / blacklist screens, or (fillStrategy,
-        // advancedAutoStoreModus) hidden until the storage points rework decides about them
-        public static final List<IConfigBase> HIDDEN = ImmutableList.of(QUICK_DEPOSIT_DISABLED_SLOTS, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, FILL_STRATEGY, ADVANCED_AUTO_STORE_MODUS);
+        // Saved, but not shown in any tab: edited in their own picker screens
+        public static final List<IConfigBase> HIDDEN = ImmutableList.of(QUICK_DEPOSIT_DISABLED_SLOTS, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, STORAGE_BLOCK_TYPES);
         public static final List<IConfigBase> ESP = ImmutableList.of(ITEM_ESP, BLOCK_ESP, BLOCK_ESP_RADIUS, ENTITY_ESP);
         // Needs Baritone (the API build). Without it the option does nothing, and the hover text shows a red warning.
         private static ConfigBoolean baritoneOption(String name, boolean defaultValue) {
@@ -192,7 +220,8 @@ public class Configs {
         public static final ConfigStringList BLOCK_ESP_RECENT  = new ConfigStringList("blockEspRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
         public static final ConfigStringList ENTITY_ESP_RECENT = new ConfigStringList("entityEspRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
         public static final ConfigStringList AUTO_EAT_BLACKLIST_RECENT = new ConfigStringList("autoEatBlacklistRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
+        public static final ConfigStringList STORAGE_BLOCK_TYPES_RECENT = new ConfigStringList("storageBlockTypesRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
 
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(BLOCK_ESP_COLORS, ENTITY_ESP_COLORS, BLOCK_ESP_RECENT, ENTITY_ESP_RECENT, AUTO_EAT_BLACKLIST_RECENT);
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(BLOCK_ESP_COLORS, ENTITY_ESP_COLORS, BLOCK_ESP_RECENT, ENTITY_ESP_RECENT, AUTO_EAT_BLACKLIST_RECENT, STORAGE_BLOCK_TYPES_RECENT);
     }
 }

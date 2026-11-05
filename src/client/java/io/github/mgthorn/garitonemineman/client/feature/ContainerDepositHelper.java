@@ -6,7 +6,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
-import io.github.mgthorn.garitonemineman.client.config.FillStrategy;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry.ContentSlot;
 
@@ -20,18 +19,18 @@ public final class ContainerDepositHelper {
 
     /**
      * Finds the best destination slot (0-based, within the chest's own slot range) for {@code stack}
-     * according to the chest's per-slot enabled mask and item restriction, and the given fill
-     * strategy. A slot counts as a valid merge target as soon as it has room for at least one more of
+     * according to the chest's per-slot enabled mask and item restriction: the lowest slot that is
+     * either empty or holds the same item with room left. A slot counts as a valid merge target as soon as it has room for at least one more of
      * the item — not only when the entire incoming stack would fit — so callers distributing a stack
      * across multiple slots (see {@code MixinAbstractContainerMenu}'s quick-move handling) can call this
      * repeatedly, transferring as much as each returned slot can hold via {@link net.minecraft.world.inventory.Slot#safeInsert}
      * and re-querying for the remainder. Returns -1 if nothing in the chest has any room left at all.
      *
      * A slot configured for this exact item always wins over a plain unrestricted slot, regardless of
-     * slot index or fill strategy — that's the whole point of configuring a slot for an item.
+     * slot index — that's the whole point of configuring a slot for an item.
      */
     public static int findDestinationSlot(AbstractContainerMenu menu, int containerSlotCount,
-            StorageBlockEntry entry, ItemStack stack, FillStrategy strategy) {
+            StorageBlockEntry entry, ItemStack stack) {
         int firstEmpty = -1;
         int firstMergeable = -1;
         int firstConfiguredEmpty = -1;
@@ -68,15 +67,9 @@ public final class ContainerDepositHelper {
         }
 
         if (firstConfiguredMergeable != -1 || firstConfiguredEmpty != -1) {
-            return strategy == FillStrategy.STACK_MERGE_FIRST
-                    ? (firstConfiguredMergeable != -1 ? firstConfiguredMergeable : firstConfiguredEmpty)
-                    : (firstConfiguredEmpty != -1 && firstConfiguredMergeable != -1
-                            ? Math.min(firstConfiguredEmpty, firstConfiguredMergeable)
-                            : (firstConfiguredEmpty != -1 ? firstConfiguredEmpty : firstConfiguredMergeable));
-        }
-
-        if (strategy == FillStrategy.STACK_MERGE_FIRST) {
-            return firstMergeable != -1 ? firstMergeable : firstEmpty;
+            return firstConfiguredEmpty != -1 && firstConfiguredMergeable != -1
+                    ? Math.min(firstConfiguredEmpty, firstConfiguredMergeable)
+                    : (firstConfiguredEmpty != -1 ? firstConfiguredEmpty : firstConfiguredMergeable);
         }
 
         if (firstEmpty == -1) {

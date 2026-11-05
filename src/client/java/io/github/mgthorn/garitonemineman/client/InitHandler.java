@@ -172,10 +172,8 @@ public class InitHandler implements IInitializationHandler {
                 var player = Minecraft.getInstance().player;
                 if (player == null) return true;
 
-                StoragePoint point = StoragePointManager.getInstance()
-                        .getSelectedOrNearestStoragePoint(player.blockPosition());
+                StoragePoint point = getReachableActiveStoragePoint(player);
                 if (point == null) {
-                    player.sendOverlayMessage(Component.literal("No storage point available"));
                     return true;
                 }
 
@@ -189,10 +187,8 @@ public class InitHandler implements IInitializationHandler {
                 var player = Minecraft.getInstance().player;
                 if (player == null) return true;
 
-                StoragePoint point = StoragePointManager.getInstance()
-                        .getSelectedOrNearestStoragePoint(player.blockPosition());
+                StoragePoint point = getReachableActiveStoragePoint(player);
                 if (point == null) {
-                    player.sendOverlayMessage(Component.literal("No storage point available"));
                     return true;
                 }
 
@@ -237,5 +233,23 @@ public class InitHandler implements IInitializationHandler {
         );
 
         InputEventHandler.getKeybindManager().registerKeybindProvider(new MinemanKeybindProvider());
+    }
+
+    /** The active storage point if it's in this dimension; otherwise shows why not and returns null. */
+    @org.jetbrains.annotations.Nullable
+    private static StoragePoint getReachableActiveStoragePoint(net.minecraft.world.entity.player.Player player) {
+        StoragePoint point = StoragePointManager.getInstance().getActiveStoragePoint();
+
+        if (point == null) {
+            player.sendOverlayMessage(Component.literal("No active storage point (set one in Storage Points)"));
+            return null;
+        }
+
+        if (StoragePointManager.getInstance().isInCurrentDimension(point) == false) {
+            player.sendOverlayMessage(Component.literal("Storage point \"" + point.getName() + "\" is in " + point.getDimensionId()));
+            return null;
+        }
+
+        return point;
     }
 }

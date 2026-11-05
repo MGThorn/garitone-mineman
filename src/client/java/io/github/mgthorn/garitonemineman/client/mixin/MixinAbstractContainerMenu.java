@@ -15,7 +15,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import io.github.mgthorn.garitonemineman.client.compat.OpenContainerTracker;
-import io.github.mgthorn.garitonemineman.client.config.FillStrategy;
 import io.github.mgthorn.garitonemineman.client.feature.ContainerDepositHelper;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
@@ -105,7 +104,7 @@ public class MixinAbstractContainerMenu {
 
             while (remaining.isEmpty() == false) {
                 int destSlot = ContainerDepositHelper.findDestinationSlot(
-                        self, containerSlotCount, entry, remaining, FillStrategy.FIRST_AVAILABLE_SLOT);
+                        self, containerSlotCount, entry, remaining);
 
                 if (destSlot == -1) {
                     break;

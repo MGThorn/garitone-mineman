@@ -63,7 +63,7 @@ public final class TaskManager {
             }
 
             if (storingItems) {
-                tasks.add(new TaskInfo(Kind.STORE_TRIP, 1, "Storing items" + SmartMinemanHandler.describeProgress(),
+                tasks.add(new TaskInfo(Kind.STORE_TRIP, 1, "Storing items" + tripTarget() + SmartMinemanHandler.describeProgress(),
                         eating ? Status.WAITING : running, true));
 
                 if (pendingEat) {
@@ -76,7 +76,7 @@ public final class TaskManager {
             }
         }
         else if (storingItems) {
-            tasks.add(new TaskInfo(Kind.STORE_TRIP, 0, "Store items" + SmartMinemanHandler.describeProgress(),
+            tasks.add(new TaskInfo(Kind.STORE_TRIP, 0, "Store items" + tripTarget() + SmartMinemanHandler.describeProgress(),
                     eating ? Status.WAITING : running, true));
 
             if (eating) {
@@ -108,6 +108,11 @@ public final class TaskManager {
             case EATING, QUEUED_EAT -> HungryMinemanHandler.skipUntilJobEnds();
             case QUICK_DEPOSIT -> ChestQuickDepositHandler.cancelAll();
         }
+    }
+
+    private static String tripTarget() {
+        String name = SmartMinemanHandler.getTripPointName();
+        return name != null ? " in " + name : "";
     }
 
     private static String describeBaritoneJob() {

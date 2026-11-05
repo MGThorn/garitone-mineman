@@ -20,6 +20,7 @@ import io.github.mgthorn.garitonemineman.client.feature.SmartMinemanHandler;
 import io.github.mgthorn.garitonemineman.client.feature.StorageContentSnapshotter;
 import io.github.mgthorn.garitonemineman.client.feature.ToolSwitchBackHandler;
 import io.github.mgthorn.garitonemineman.client.storage.StorageContentIndex;
+import io.github.mgthorn.garitonemineman.client.storage.StoragePointRescanner;
 import io.github.mgthorn.garitonemineman.client.structures.StructureWaypointManager;
 
 public class GaritoneMinemanClient implements ClientModInitializer {
@@ -37,6 +38,7 @@ public class GaritoneMinemanClient implements ClientModInitializer {
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> BlockEspHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> ToolSwitchBackHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> SelectionToolHandler.onClientTick());
+		ClientTickEvents.START_CLIENT_TICK.register(mc -> StoragePointRescanner.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> StructureWaypointManager.getInstance().onClientTick());
 		RenderEventHandler.getInstance().registerWorldLastRenderer(new MinemanWorldRenderer());
 		PauseIndicatorRenderHandler.register();

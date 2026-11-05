@@ -3,6 +3,7 @@ package io.github.mgthorn.garitonemineman.client.feature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -33,6 +34,10 @@ import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
  * If every chest is done and items are left, the job stays held and the global pause turns on until
  * the player makes room and presses pause/resume.
  *
+ * Trips only go to the world's <b>active storage point</b> ({@link StoragePointManager#getActiveStoragePoint()}).
+ * Without one, or when it's in another dimension, no trip starts: a message says so when a job starts
+ * and when the inventory gets full, and the job just continues.
+ *
  * DEPOSITING and RESUMING run whether or not the smartMineman setting is on, so
  * {@link #triggerManualStoreItems()} (Store Items hotkey and GUI button) can run a one-off trip; only
  * the automatic start on a full inventory needs the setting.
@@ -57,16 +62,31 @@ public final class SmartMinemanHandler {
     private static int travelTicks;
     // Every chest was full with items left over: the job stays held and the global pause is on until the player resumes
     private static boolean storageFull;
-    // The player cancelled the store trip in the Task Manager: no automatic trip until the job ends
+    // The player cancelled the store trip in the Task Manager (or there's nowhere to go): no automatic trip until the job ends
     private static boolean skipAutoTripsForJob;
+    // A trip started from a storage point's own screen goes there instead of the active one
+    @Nullable private static StoragePoint manualTarget;
+    @Nullable private static StoragePoint tripPoint;
 
     private SmartMinemanHandler() {}
 
-    /** Starts a store trip right now, independent of the setting toggle. */
+    /** Starts a store trip to the active storage point right now, independent of the setting toggle. */
     public static void triggerManualStoreItems() {
+        triggerManualStoreItems(null);
+    }
+
+    /** Starts a store trip right now to {@code target} (null: the active storage point). */
+    public static void triggerManualStoreItems(@Nullable StoragePoint target) {
         if (state == State.IDLE || state == State.WATCHING) {
             manualTripRequested = true;
+            manualTarget = target;
         }
+    }
+
+    /** Name of the storage point the running trip goes to, or null. */
+    @Nullable
+    public static String getTripPointName() {
+        return isHandlingFullInventory() && tripPoint != null ? tripPoint.getName() : null;
     }
 
     /** Aborts the store trip (if any) immediately and resets to idle. */
@@ -141,6 +161,7 @@ public final class SmartMinemanHandler {
                 }
                 else if (settingEnabled && BaritoneController.isBlockBreakingJobActive()) {
                     state = State.WATCHING;
+                    warnIfNoUsableStoragePoint(mc, "store trips are off for this job");
                 }
             }
             case WATCHING -> {
@@ -166,15 +187,20 @@ public final class SmartMinemanHandler {
     }
 
     private static void startTrip(Minecraft mc) {
+        boolean manual = manualTripRequested;
+        StoragePoint point = manualTarget != null ? manualTarget : StoragePointManager.getInstance().getActiveStoragePoint();
+        boolean nowhereToGo = warnIfNoUsableStoragePoint(mc, "continuing") || point == null;
         manualTripRequested = false;
-        BaritoneController.holdJob();
-        StoragePoint point = StoragePointManager.getInstance().getSelectedOrNearestStoragePoint(mc.player.blockPosition());
+        manualTarget = null;
 
-        if (point == null) {
-            mc.player.sendOverlayMessage(Component.literal("Smart Mineman: no storage point available, continuing"));
-            state = State.RESUMING;
+        if (nowhereToGo) {
+            // Don't try again on every tick while the inventory stays full; a manual trip can still be started
+            skipAutoTripsForJob = manual == false && BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE;
             return;
         }
+
+        BaritoneController.holdJob();
+        tripPoint = point;
 
         depositQueue = new ArrayList<>(point.getStorageBlocks());
         depositIndex = 0;
@@ -277,6 +303,28 @@ public final class SmartMinemanHandler {
         }
     }
 
+    /**
+     * Shows why no trip can go anywhere: no active storage point, or it's in another dimension (a trip
+     * started from a storage point's own screen has its own target). Returns true if there's nowhere to go.
+     */
+    private static boolean warnIfNoUsableStoragePoint(Minecraft mc, String consequence) {
+        StoragePoint target = manualTarget != null ? manualTarget : StoragePointManager.getInstance().getActiveStoragePoint();
+
+        if (target == null) {
+            mc.player.sendOverlayMessage(Component.literal("Smart Mineman: no active storage point, " + consequence
+                    + " (set one in Storage Points)"));
+            return true;
+        }
+
+        if (StoragePointManager.getInstance().isInCurrentDimension(target) == false) {
+            mc.player.sendOverlayMessage(Component.literal("Smart Mineman: storage point \"" + target.getName() + "\" is in "
+                    + target.getDimensionId() + ", " + consequence));
+            return true;
+        }
+
+        return false;
+    }
+
     /** Skips chests that are turned off, were full a moment ago, or (by their last seen contents) can't take anything. */
     private static boolean isWorthTrying(StorageBlockEntry entry, BlockPos pos, Player player) {
         return entry.isUseEnabled()
@@ -346,6 +394,8 @@ public final class SmartMinemanHandler {
         state = State.IDLE;
         manualTripRequested = false;
         storageFull = false;
+        tripPoint = null;
+        manualTarget = null;
         depositQueue = List.of();
         depositIndex = 0;
         resetChest();

@@ -60,6 +60,9 @@ public class SelectionHudRenderHandler {
             }
         }
 
+        var active = io.github.mgthorn.garitonemineman.client.storage.StoragePointManager.getInstance().getActiveStoragePoint();
+        lines.add("§7Active storage point: " + (active != null ? "§a" + active.getName() : "none"));
+
         if (SelectionToolHandler.hasRecentMiss()) {
             lines.add("§cNo block in range");
         }

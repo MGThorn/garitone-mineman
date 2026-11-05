@@ -19,7 +19,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import io.github.mgthorn.garitonemineman.client.compat.OpenContainerTracker;
-import io.github.mgthorn.garitonemineman.client.config.FillStrategy;
 import io.github.mgthorn.garitonemineman.client.feature.ContainerDepositHelper;
 import io.github.mgthorn.garitonemineman.client.feature.ToolSwitchBackHandler;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
@@ -148,7 +147,7 @@ public class MixinMultiPlayerGameMode {
 
         while (carried.isEmpty() == false) {
             int destSlot = ContainerDepositHelper.findDestinationSlot(
-                    menu, containerSlotCount, entry, carried, FillStrategy.FIRST_AVAILABLE_SLOT);
+                    menu, containerSlotCount, entry, carried);
 
             if (destSlot == -1) {
                 break;

@@ -101,7 +101,13 @@ public class GuiTaskManager extends GuiListBase<TaskInfo, WidgetTaskEntry, Widge
         return "Baritone: " + baritone
                 + "    Smart Mineman: " + onOff(Configs.Generic.SMART_MINEMAN.getBooleanValue())
                 + "    Hungry Mineman: " + onOff(Configs.Generic.HUNGRY_MINEMAN.getBooleanValue())
+                + "    Active storage: " + activeStorage()
                 + (MinemanPauseController.isUserPaused() ? "    §ePAUSED§r" : "");
+    }
+
+    private static String activeStorage() {
+        var point = io.github.mgthorn.garitonemineman.client.storage.StoragePointManager.getInstance().getActiveStoragePoint();
+        return point != null ? "§a" + point.getName() + "§r" : "§7none§r";
     }
 
     private static String onOff(boolean value) {

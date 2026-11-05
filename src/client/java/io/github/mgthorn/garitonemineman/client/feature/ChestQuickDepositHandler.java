@@ -27,7 +27,6 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import io.github.mgthorn.garitonemineman.client.compat.ItemScrollerCompat;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
-import io.github.mgthorn.garitonemineman.client.config.FillStrategy;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
@@ -50,14 +49,11 @@ import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
  * Two ways to drive it:
  * <ul>
  *   <li>{@link #tryQuickDeposit(Player)} — the hotkey/GUI entry point, working against the current
- *       storage point's own blocks (no travel). Its behavior depends on
- *       {@link Configs.Generic#ADVANCED_AUTO_STORE_MODUS}: enabled (default), it picks whichever
- *       single usable storage block looks best able to take the player's inventory (per its
- *       last-known contents) and makes one attempt against it. Disabled, it makes no such guess —
- *       it works through every usable storage block in list order, starting with the first, one
- *       attempt each, continuing regardless of each individual outcome until either the player's
- *       inventory is empty (outside {@link Configs.Generic#QUICK_DEPOSIT_DISABLED_SLOTS}) or every
- *       block has had a turn. Reports failures on the hotbar.</li>
+ *       nearest storage point's own blocks (no travel). It skips blocks whose last-known contents
+ *       have no room for the player's items (unknown blocks are tried) and works through the rest in
+ *       list order, one attempt each, until either the player's inventory is empty (outside
+ *       {@link Configs.Generic#QUICK_DEPOSIT_DISABLED_SLOTS}) or every block has had a turn.
+ *       Reports failures on the hotbar.</li>
  *   <li>{@link #beginAttempt(StorageBlockEntry)} / {@link #isBusy()} / {@link #consumeLastResult()} —
  *       for driving a specific, caller-chosen entry (used by {@link SmartMinemanHandler} to try a
  *       queue of chests, pathing to one with Baritone first if it's out of reach).</li>
@@ -84,8 +80,7 @@ public final class ChestQuickDepositHandler {
     // Menu slots whose click moved nothing into the open chest; skipped for the rest of this chest
     private static Set<Integer> stuckSlots = new HashSet<>();
 
-    // "Simple" mode only (advancedAutoStoreModus disabled): the full ordered list of usable storage
-    // blocks for the current tryQuickDeposit() call. Worked through one at a time regardless of each
+    // tryQuickDeposit() only: the ordered storage blocks that look like they have room. Worked through one at a time regardless of each
     // one's own outcome, via advanceOrFinish(), until the player's inventory is empty or it runs out.
     private static List<StorageBlockEntry> sequentialQueue = List.of();
     private static int sequentialIndex;
@@ -98,45 +93,41 @@ public final class ChestQuickDepositHandler {
             return;
         }
 
-        StoragePoint point = StoragePointManager.getInstance()
-                .getSelectedOrNearestStoragePoint(player.blockPosition());
+        // The storage point the player is at (quick deposit doesn't walk), not necessarily the active one
+        StoragePoint point = StoragePointManager.getInstance().getNearestStoragePoint(player.blockPosition());
 
         if (point == null) {
-            showError(player, "No storage point available");
+            showError(player, "No storage point in this dimension");
             return;
         }
 
+        boolean anyUsable = false;
         List<StorageBlockEntry> usable = new ArrayList<>();
+        Set<Integer> disabledSlots = parseDisabledSlots();
 
         for (StorageBlockEntry entry : point.getStorageBlocks()) {
             if (entry.isUseEnabled()) {
-                usable.add(entry);
+                anyUsable = true;
+
+                // Skips chests whose last-known contents have no room; unknown chests are worth a try
+                if (ContainerDepositHelper.hasRoomForInventory(entry, player, disabledSlots)) {
+                    usable.add(entry);
+                }
             }
         }
 
-        if (usable.isEmpty()) {
+        if (anyUsable == false) {
             showError(player, "No usable storage block in storage point");
             return;
         }
 
-        if (Configs.Generic.ADVANCED_AUTO_STORE_MODUS.getBooleanValue()) {
-            Set<Integer> disabledSlots = parseDisabledSlots();
-
-            for (StorageBlockEntry entry : usable) {
-                if (ContainerDepositHelper.hasRoomForInventory(entry, player, disabledSlots)) {
-                    sequentialMode = false;
-                    beginAttempt(entry);
-                    return;
-                }
-            }
-
-            showError(player, "No free slots in Storage point");
+        if (usable.isEmpty()) {
+            showError(player, "No free slots in storage point");
             return;
         }
 
-        // Simple mode: no pre-analysis of which block is "best" — work through all of them in list
-        // order, starting with the first, until the player's inventory is empty (outside
-        // QUICK_DEPOSIT_DISABLED_SLOTS) or every one has had a turn. See advanceOrFinish().
+        // Work through the chests that look like they have room, in list order, until the inventory
+        // is empty (outside QUICK_DEPOSIT_DISABLED_SLOTS) or every one has had a turn. See advanceOrFinish().
         sequentialQueue = usable;
         sequentialIndex = 0;
         sequentialMode = true;
@@ -419,7 +410,7 @@ public final class ChestQuickDepositHandler {
     private static boolean chestHasRoomFor(AbstractContainerMenu menu, int containerSlotCount, ItemStack stack) {
         if (targetEntry != null && targetEntry.hasRules()) {
             return ContainerDepositHelper.findDestinationSlot(
-                    menu, containerSlotCount, targetEntry, stack, FillStrategy.FIRST_AVAILABLE_SLOT) != -1;
+                    menu, containerSlotCount, targetEntry, stack) != -1;
         }
 
         for (int i = 0; i < containerSlotCount; i++) {

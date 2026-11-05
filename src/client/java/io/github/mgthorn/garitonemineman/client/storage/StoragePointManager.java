@@ -12,70 +12,24 @@ import net.minecraft.core.BlockPos;
 import fi.dy.masa.malilib.util.StringUtils;
 import fi.dy.masa.malilib.util.WorldUtils;
 
+/**
+ * All storage points of the current world/server, grouped by dimension, and the world's one
+ * <b>active storage point</b>. Only the active storage point is used for store trips and counted for
+ * other mods ({@link io.github.mgthorn.garitonemineman.api.MinemanStorageApi}); it can be in any
+ * dimension. Saved by {@link StoragePointPersistence}, one file per storage point.
+ */
 public class StoragePointManager {
     private static final StoragePointManager INSTANCE = new StoragePointManager();
-    private final Map<String, Map<String, List<StoragePoint>>> storagePointsByWorld = new HashMap<>();
-    @Nullable private StoragePoint selectedStoragePoint;
+    private final Map<String, StoragePointPersistence.WorldData> worlds = new HashMap<>();
     @Nullable private String loadedWorldId;
+    // Goes up on every saved change, so other code (and other mods) can tell when to recount
+    private int revision;
 
     private StoragePointManager() {}
 
     public static StoragePointManager getInstance() { return INSTANCE; }
 
-    @Nullable
-    public StoragePoint getSelectedStoragePoint() {
-        return this.selectedStoragePoint;
-    }
-
-    public void setSelectedStoragePoint(@Nullable StoragePoint point) {
-        if (this.selectedStoragePoint == point) {
-            return;
-        }
-
-        if (this.selectedStoragePoint != null) {
-            this.selectedStoragePoint.setSelected(false);
-        }
-
-        this.selectedStoragePoint = point;
-
-        if (point != null) {
-            point.setSelected(true);
-        }
-
-        this.save();
-    }
-
-    /**
-     * Returns the explicitly selected storage point if there is one, otherwise the closest enabled
-     * storage point to the given position. Used by hotkeys, which have no GUI row to click on.
-     */
-    @Nullable
-    public StoragePoint getSelectedOrNearestStoragePoint(BlockPos playerPos) {
-        if (this.selectedStoragePoint != null) {
-            return this.selectedStoragePoint;
-        }
-
-        StoragePoint nearest = null;
-        long bestDistSq = Long.MAX_VALUE;
-
-        for (StoragePoint point : this.getStoragePoints()) {
-            if (point.isEnabled() == false) {
-                continue;
-            }
-
-            long dx = point.getX() - playerPos.getX();
-            long dy = point.getY() - playerPos.getY();
-            long dz = point.getZ() - playerPos.getZ();
-            long distSq = dx * dx + dy * dy + dz * dz;
-
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                nearest = point;
-            }
-        }
-
-        return nearest;
-    }
+    // ---- World / dimension ----
 
     private static boolean isSingleplayer() {
         return Minecraft.getInstance().isLocalServer();
@@ -83,59 +37,86 @@ public class StoragePointManager {
 
     @Nullable
     private static String getCurrentWorldOrServerId() {
-        return StringUtils.getWorldOrServerName();
+        return Minecraft.getInstance().level != null ? StringUtils.getWorldOrServerName() : null;
     }
 
     @Nullable
-    private static String getCurrentDimensionId() {
+    public static String getCurrentDimensionId() {
         var level = Minecraft.getInstance().level;
         return level != null ? WorldUtils.getDimensionId(level) : null;
     }
 
-    private void ensureWorldLoaded(String worldId) {
-        if (Objects.equals(this.loadedWorldId, worldId) && this.storagePointsByWorld.containsKey(worldId)) {
-            return;
-        }
-
-        this.loadedWorldId = worldId;
-
-        if (this.storagePointsByWorld.containsKey(worldId) == false) {
-            Map<String, List<StoragePoint>> loaded = StoragePointPersistence.loadWorldIndex(isSingleplayer(), worldId);
-            this.storagePointsByWorld.put(worldId, loaded);
-            this.restoreSelectedStoragePoint(loaded);
-        }
-    }
-
-    /** Re-selects whichever point (if any) was flagged "selected" the last time this world was saved. */
-    private void restoreSelectedStoragePoint(Map<String, List<StoragePoint>> data) {
-        for (List<StoragePoint> points : data.values()) {
-            for (StoragePoint point : points) {
-                if (point.isSelected()) {
-                    this.selectedStoragePoint = point;
-                    return;
-                }
-            }
-        }
-    }
-
     @Nullable
-    private List<StoragePoint> getCurrentListOrNull() {
+    private StoragePointPersistence.WorldData getWorldData() {
         String worldId = getCurrentWorldOrServerId();
-        String dimensionId = getCurrentDimensionId();
 
-        if (worldId == null || dimensionId == null) {
+        if (worldId == null) {
             return null;
         }
 
-        this.ensureWorldLoaded(worldId);
+        if (Objects.equals(this.loadedWorldId, worldId) == false || this.worlds.containsKey(worldId) == false) {
+            this.loadedWorldId = worldId;
+            this.worlds.computeIfAbsent(worldId, id -> StoragePointPersistence.loadWorld(isSingleplayer(), id));
+            this.revision++;
+        }
 
-        return this.storagePointsByWorld.get(worldId).computeIfAbsent(dimensionId, d -> new ArrayList<>());
+        return this.worlds.get(worldId);
     }
 
+    public boolean isInCurrentDimension(StoragePoint point) {
+        return point.getDimensionId().equals(getCurrentDimensionId());
+    }
+
+    // ---- Lists ----
+
+    /** Storage points of the dimension the player is in (rendering, protection, chest lookups). */
     public List<StoragePoint> getStoragePoints() {
-        List<StoragePoint> list = this.getCurrentListOrNull();
-        return list != null ? list : Collections.emptyList();
+        StoragePointPersistence.WorldData data = this.getWorldData();
+        String dimensionId = getCurrentDimensionId();
+
+        if (data == null || dimensionId == null) {
+            return Collections.emptyList();
+        }
+
+        return data.byDimension.computeIfAbsent(dimensionId, d -> new ArrayList<>());
     }
+
+    /** Every storage point of the world, all dimensions (the Storage Points screen). */
+    public List<StoragePoint> getAllStoragePoints() {
+        StoragePointPersistence.WorldData data = this.getWorldData();
+        List<StoragePoint> all = new ArrayList<>();
+
+        if (data != null) {
+            data.byDimension.values().forEach(all::addAll);
+        }
+
+        return all;
+    }
+
+    // ---- Active storage point ----
+
+    /** The world's active storage point (any dimension), or null if none is set. */
+    @Nullable
+    public StoragePoint getActiveStoragePoint() {
+        StoragePointPersistence.WorldData data = this.getWorldData();
+        return data != null ? data.active : null;
+    }
+
+    public boolean isActive(StoragePoint point) {
+        return this.getActiveStoragePoint() == point;
+    }
+
+    /** Makes the point the world's active storage point (null: none). */
+    public void setActiveStoragePoint(@Nullable StoragePoint point) {
+        StoragePointPersistence.WorldData data = this.getWorldData();
+
+        if (data != null && data.active != point) {
+            data.active = point;
+            this.save();
+        }
+    }
+
+    // ---- Lookups ----
 
     /**
      * Finds the storage block entry (if any) registered at the given world position, in the current
@@ -161,61 +142,93 @@ public class StoragePointManager {
         return null;
     }
 
+    /** The storage point in this dimension closest to the position (by its area), or null if there is none. */
+    @Nullable
+    public StoragePoint getNearestStoragePoint(BlockPos pos) {
+        StoragePoint nearest = null;
+        double best = Double.MAX_VALUE;
+
+        for (StoragePoint point : this.getStoragePoints()) {
+            double distSq = point.distanceSqToArea(pos.getX(), pos.getY(), pos.getZ());
+
+            if (distSq < best) {
+                best = distSq;
+                nearest = point;
+            }
+        }
+
+        return nearest;
+    }
+
+    // ---- Changes ----
+
     @Nullable
     public StoragePoint addStoragePoint(String name, int x, int y, int z, BlockPos corner1, BlockPos corner2) {
-        List<StoragePoint> list = this.getCurrentListOrNull();
+        String dimensionId = getCurrentDimensionId();
+        StoragePointPersistence.WorldData data = this.getWorldData();
 
-        if (list == null) {
+        if (data == null || dimensionId == null) {
             return null;
         }
 
         StoragePoint point = new StoragePoint(name, true);
+        point.setDimensionId(dimensionId);
         point.setX(x);
         point.setY(y);
         point.setZ(z);
         point.setCorner1(corner1.getX(), corner1.getY(), corner1.getZ());
         point.setCorner2(corner2.getX(), corner2.getY(), corner2.getZ());
-        point.setSnapshotFileName(StoragePointPersistence.createSnapshotFile(name));
-        list.add(point);
+        data.byDimension.computeIfAbsent(dimensionId, d -> new ArrayList<>()).add(point);
         this.save();
         return point;
     }
 
     public void renameStoragePoint(StoragePoint point, String newName) {
-        String newFileName = StoragePointPersistence.renameSnapshotFile(point.getSnapshotFileName(), newName);
-        point.setSnapshotFileName(newFileName);
+        String worldId = getCurrentWorldOrServerId();
+
+        if (worldId != null) {
+            point.setFileName(StoragePointPersistence.renamePointFile(isSingleplayer(), worldId, point, newName));
+        }
+
         point.setName(newName);
         this.save();
     }
 
     public void removeStoragePoint(StoragePoint point) {
-        List<StoragePoint> list = this.getCurrentListOrNull();
+        StoragePointPersistence.WorldData data = this.getWorldData();
+        String worldId = getCurrentWorldOrServerId();
+
+        if (data == null || worldId == null) {
+            return;
+        }
+
+        List<StoragePoint> list = data.byDimension.get(point.getDimensionId());
 
         if (list != null && list.remove(point)) {
-            if (this.selectedStoragePoint == point) {
-                this.selectedStoragePoint = null;
+            if (data.active == point) {
+                data.active = null;
             }
 
+            StoragePointPersistence.deletePointFile(isSingleplayer(), worldId, point);
             this.save();
         }
     }
 
-    /**
-     * Persists the currently loaded world/server's storage points to its per-world JSON index.
-     * Call this after any change to a storage point's fields so the change survives a GUI/game restart.
-     */
+    /** Saves the current world's storage points. Call after any change, contents included. */
     public void save() {
         String worldId = getCurrentWorldOrServerId();
-        Map<String, List<StoragePoint>> data = worldId != null ? this.storagePointsByWorld.get(worldId) : null;
+        StoragePointPersistence.WorldData data = worldId != null ? this.worlds.get(worldId) : null;
 
-        if (worldId != null && data != null) {
-            StoragePointPersistence.saveWorldIndex(isSingleplayer(), worldId, data);
-
-            for (List<StoragePoint> points : data.values()) {
-                for (StoragePoint point : points) {
-                    StoragePointPersistence.writeSnapshotFile(point);
-                }
-            }
+        if (data != null) {
+            StoragePointPersistence.saveWorld(isSingleplayer(), worldId, data);
         }
+
+        this.revision++;
+    }
+
+    /** Goes up on every change (and world switch); compare to know when counts are outdated. */
+    public int getRevision() {
+        this.getWorldData(); // a world switch counts as a change
+        return this.revision;
     }
 }

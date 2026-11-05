@@ -1,12 +1,15 @@
 package io.github.mgthorn.garitonemineman.client.storage;
 
+import java.util.List;
 import org.jetbrains.annotations.Nullable;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemContainerContents;
 
 /**
- * A single storage block (chest, copper chest, shulker box, trapped chest, or barrel) detected
- * inside a StoragePoint's selection. Double chests are represented by a single entry.
+ * A single storage block (any block in the storageBlockTypes setting: chests, barrels, shulker
+ * boxes, ...) detected inside a StoragePoint's area. Double chests are represented by a single entry.
  */
 public class StorageBlockEntry {
     private final int x;
@@ -27,20 +30,39 @@ public class StorageBlockEntry {
     @Nullable private String[] slotItemFilter;
     /**
      * Last-known contents, one entry per slot (flat across both halves of a double chest, same
-     * convention as {@link #slotEnabled}/{@link #slotItemFilter}). Never loaded from or written to the
-     * combined per-world index — only ever populated at runtime (from an open container closing, or a
-     * singleplayer-only direct read) and exported into the per-point {@code .storagepoint} snapshot
-     * file. Starts null every session until first populated.
+     * convention as {@link #slotEnabled}/{@link #slotItemFilter}). Populated when the container's
+     * screen closes (or read directly in singleplayer) and saved in the storage point's file, so it
+     * survives restarts. Null until the chest has been seen once.
      */
     @Nullable private ContentSlot[] contents;
+    /** When {@link #contents} was last updated (epoch millis), 0 if never. */
+    private long lastSeen;
 
-    /** One chest slot's last-known contents: an item id, or null for an empty slot. */
-    public record ContentSlot(@Nullable String itemId, int count) {
-        public static final ContentSlot EMPTY = new ContentSlot(null, 0);
+    /**
+     * One chest slot's last-known contents: an item id, or null for an empty slot. {@code inner} holds
+     * the items inside a shulker box (or any item with a container component), so they count as stored.
+     */
+    public record ContentSlot(@Nullable String itemId, int count, @Nullable List<ContentSlot> inner) {
+        public static final ContentSlot EMPTY = new ContentSlot(null, 0, null);
 
         public static ContentSlot fromStack(ItemStack stack) {
-            return stack.isEmpty() ? EMPTY
-                    : new ContentSlot(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount());
+            if (stack.isEmpty()) {
+                return EMPTY;
+            }
+
+            List<ContentSlot> inner = null;
+            ItemContainerContents container = stack.get(DataComponents.CONTAINER);
+
+            if (container != null) {
+                List<ContentSlot> items = container.nonEmptyItemCopyStream().map(ContentSlot::fromStack).toList();
+                inner = items.isEmpty() ? null : items;
+            }
+
+            return new ContentSlot(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), inner);
+        }
+
+        public boolean isEmpty() {
+            return this.itemId == null;
         }
     }
 
@@ -118,7 +140,17 @@ public class StorageBlockEntry {
     public boolean hasRules() { return this.slotEnabled != null || this.hasSlotItemFilter(); }
 
     @Nullable public ContentSlot[] getContents() { return this.contents; }
-    public void setContents(@Nullable ContentSlot[] contents) { this.contents = contents; }
+    /** Sets freshly seen contents and stamps {@link #getLastSeen()} with now. */
+    public void setContents(@Nullable ContentSlot[] contents) {
+        this.contents = contents;
+        this.lastSeen = contents != null ? System.currentTimeMillis() : 0;
+    }
+    /** Restores contents loaded from disk (or carried over by a rescan) with their original time. */
+    public void restoreContents(@Nullable ContentSlot[] contents, long lastSeen) {
+        this.contents = contents;
+        this.lastSeen = lastSeen;
+    }
+    public long getLastSeen() { return this.lastSeen; }
     public boolean hasContents() { return this.contents != null; }
 
     public String getDisplayName() {

@@ -9,18 +9,16 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 
 /**
- * Scans the volume between a StoragePoint's two selection corners for storage blocks
- * (chest, copper chest, trapped chest, shulker box, barrel). Double chests are merged
- * into a single entry, and previously-set "use" toggle states are carried over by position.
+ * Scans the volume between a StoragePoint's two selection corners for storage blocks (every block in
+ * {@link Configs.Generic#STORAGE_BLOCK_TYPES}). Double chests are merged into a single entry, and
+ * previously-set "use" toggle states, slot rules and contents are carried over by position.
  */
 public final class StorageBlockScanner {
     private StorageBlockScanner() {}
@@ -49,6 +47,7 @@ public final class StorageBlockScanner {
 
         List<StorageBlockEntry> result = new ArrayList<>();
         Set<BlockPos> skip = new HashSet<>();
+        Set<String> types = new HashSet<>(Configs.Generic.STORAGE_BLOCK_TYPES.getStrings());
 
         for (BlockPos mutablePos : BlockPos.betweenClosed(min, max)) {
             if (skip.contains(mutablePos)) {
@@ -58,7 +57,7 @@ public final class StorageBlockScanner {
             BlockState state = level.getBlockState(mutablePos);
             Block block = state.getBlock();
 
-            if (isStorageBlock(block) == false) {
+            if (types.contains(BuiltInRegistries.BLOCK.getKey(block).toString()) == false) {
                 continue;
             }
 
@@ -83,7 +82,7 @@ public final class StorageBlockScanner {
             if (previousEntry != null) {
                 newEntry.setSlotItemFilter(previousEntry.getSlotItemFilter());
                 newEntry.setSlotEnabled(previousEntry.getSlotEnabled());
-                newEntry.setContents(previousEntry.getContents());
+                newEntry.restoreContents(previousEntry.getContents(), previousEntry.getLastSeen());
             }
 
             result.add(newEntry);
@@ -124,9 +123,5 @@ public final class StorageBlockScanner {
         }
 
         return ordered;
-    }
-
-    private static boolean isStorageBlock(Block block) {
-        return block instanceof ChestBlock || block instanceof ShulkerBoxBlock || block instanceof BarrelBlock;
     }
 }

@@ -7,6 +7,8 @@
   "mineman.config.generic.comment.protectStoragePoints": "Baritone never breaks the blocks in protectedStorageBlocks, anywhere.\nDuring a Smart Mineman store trip it also can't break or place blocks within 5 blocks of a storage point.\nYour own allowBreak/allowPlace values come back as soon as the trip ends",
   "mineman.config.generic.name.protectedStorageBlocks": "protectedStorageBlocks",
   "mineman.config.generic.comment.protectedStorageBlocks": "Block IDs Baritone never breaks while protectStoragePoints is on, for mining, building and pathing.\nAdded to Baritone's blocksToDisallowBreaking; your own entries there stay.\nExample: minecraft:chest",
+  "mineman.config.generic.name.storageBlockTypes": "storageBlockTypes",
+  "mineman.config.generic.comment.storageBlockTypes": "Blocks a storage point picks up as storage blocks when scanning its area. Edit it with the \"Block types\" button in the Storage Points screen",
   "mineman.config.generic.name.autoEatBlacklist": "autoEatBlacklist",
   "mineman.config.generic.comment.autoEatBlacklist": "List of item IDs that easyEat will not pick up or eat. Example: minecraft:enchanted_golden_apple",
   "mineman.config.generic.name.autoEatPickOrder": "autoEatPickOrder",
@@ -19,8 +21,6 @@
   "mineman.config.generic.comment.moveMatchingIgnoreMetadata": "Ignore item metadata when matching items to move",
   "mineman.config.generic.name.berndDasBrot": "Bernd das Brot",
   "mineman.config.generic.comment.berndDasBrot": "When enabled, autoEat/easyEat always picks bread first, before applying any other pick order rules",
-  "mineman.config.generic.name.advancedAutoStoreModus": "advancedAutoStoreModus",
-  "mineman.config.generic.comment.advancedAutoStoreModus": "Enabled: Quick Deposit first checks each storage block's last-known contents and opens whichever one looks best able to take your current inventory, in one attempt. Disabled: no guessing - it just tries every usable storage block in order, starting with the first, opening and depositing into each one in turn, and keeps going until either your inventory has nothing left to deposit (ignoring quickDepositDisabledSlots) or every storage block has been tried.",
   "mineman.config.hotkeys.name.openGuiMainMenu": "openGuiMainMenu",
   "mineman.config.hotkeys.comment.openGuiMainMenu": "Open the Garitone Mineman menu",
   "mineman.config.hotkeys.name.autoEatToggle": "autoEatToggle",
@@ -66,5 +66,10 @@
   "mineman.config.warning.tweakeroo_missing": "Tweakeroo is not installed, so this option does nothing.",
   "mineman.config.warning.baritone_missing": "Baritone is not installed, so this option does nothing. Install baritone-api-fabric.",
   "mineman.config.warning.baritone_wrong_build": "This Baritone build has no API (standalone jar), so this option does nothing. Install baritone-api-fabric instead.",
-  "mineman.gui.warning.itemscroller_missing": "(Item Scroller is not installed, so sorting does nothing)"
+  "mineman.gui.warning.itemscroller_missing": "(Item Scroller is not installed, so sorting does nothing)",
+  "mineman.config.generic.comment.smartMineman": "When the inventory gets full during a Baritone mine, build or farm job, walks to the active storage point, puts the items into its storage blocks, and continues the job.\nWithout an active storage point (or when it's in another dimension) no trip starts; a message says so.",
+  "mineman.config.hotkeys.comment.storageStoreItems": "Walk to the active storage point now and put the inventory into it",
+  "mineman.config.hotkeys.comment.storageGoTo": "Walk to the active storage point's origin",
+  "mineman.config.hotkeys.comment.storageSetGoal": "Set Baritone's goal to the active storage point's origin",
+  "mineman.config.hotkeys.comment.storageChestQuickDeposit": "Put the inventory into the storage blocks of the nearest storage point, without walking"
 }

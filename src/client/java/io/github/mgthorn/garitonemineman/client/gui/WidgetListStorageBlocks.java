@@ -9,10 +9,11 @@ import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
 
 public class WidgetListStorageBlocks extends WidgetListBase<StorageBlockEntry, WidgetStorageBlockEntry> {
-    private final List<StorageBlockEntry> entries;
+    // Read through the point every time: a rescan replaces its storage block list
+    private final java.util.function.Supplier<List<StorageBlockEntry>> entries;
     private final GuiStoragePointConfiguration parentGui;
 
-    public WidgetListStorageBlocks(int x, int y, int width, int height, List<StorageBlockEntry> entries,
+    public WidgetListStorageBlocks(int x, int y, int width, int height, java.util.function.Supplier<List<StorageBlockEntry>> entries,
             GuiStoragePointConfiguration parentGui) {
         super(x, y, width, height, null);
         this.entries = entries;
@@ -27,7 +28,7 @@ public class WidgetListStorageBlocks extends WidgetListBase<StorageBlockEntry, W
 
     @Override
     protected Collection<StorageBlockEntry> getAllEntries() {
-        return this.entries;
+        return this.entries.get();
     }
 
     @Override
@@ -46,11 +47,11 @@ public class WidgetListStorageBlocks extends WidgetListBase<StorageBlockEntry, W
     }
 
     public boolean isFirst(StorageBlockEntry entry) {
-        return this.entries.indexOf(entry) == 0;
+        return this.entries.get().indexOf(entry) == 0;
     }
 
     public boolean isLast(StorageBlockEntry entry) {
-        return this.entries.indexOf(entry) == this.entries.size() - 1;
+        return this.entries.get().indexOf(entry) == this.entries.get().size() - 1;
     }
 
     /**
@@ -58,7 +59,8 @@ public class WidgetListStorageBlocks extends WidgetListBase<StorageBlockEntry, W
      * "use first" priority order, consulted by the deposit logic built in Phase 4.
      */
     public void moveEntry(StorageBlockEntry entry, int delta) {
-        int index = this.entries.indexOf(entry);
+        List<StorageBlockEntry> list = this.entries.get();
+        int index = list.indexOf(entry);
 
         if (index == -1) {
             return;
@@ -66,11 +68,11 @@ public class WidgetListStorageBlocks extends WidgetListBase<StorageBlockEntry, W
 
         int target = index + delta;
 
-        if (target < 0 || target >= this.entries.size()) {
+        if (target < 0 || target >= list.size()) {
             return;
         }
 
-        Collections.swap(this.entries, index, target);
+        Collections.swap(list, index, target);
         StoragePointManager.getInstance().save();
         this.refreshEntries();
     }

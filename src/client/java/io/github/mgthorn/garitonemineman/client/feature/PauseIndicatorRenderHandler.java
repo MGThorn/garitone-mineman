@@ -44,7 +44,8 @@ public class PauseIndicatorRenderHandler {
                 color = YELLOW;
             }
             else if (SmartMinemanHandler.isHandlingFullInventory()) {
-                text = "Mineman: storing items" + SmartMinemanHandler.describeProgress();
+                String target = SmartMinemanHandler.getTripPointName();
+                text = "Mineman: storing items" + (target != null ? " in " + target : "") + SmartMinemanHandler.describeProgress();
                 color = AQUA;
             }
             else {
