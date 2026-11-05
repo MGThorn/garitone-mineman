@@ -22,8 +22,8 @@ import io.github.mgthorn.garitonemineman.client.config.Hotkeys;
 
 public class GuiMinemanMain extends GuiConfigsBase {
     private static final int LIST_Y = 50;
-    // The ESP tab has a row with the Block ESP / Entity ESP picker buttons above its list
-    private static final int ESP_LIST_Y = 74;
+    // The ESP and Garitone tabs have a row of picker buttons above their list
+    private static final int PICKER_LIST_Y = 74;
 
     private Tab activeTab = Tab.ALL;
 
@@ -62,6 +62,22 @@ public class GuiMinemanMain extends GuiConfigsBase {
                     "Pick the entities that entityEsp highlights.",
                     "Entity models are only shown while you're in a world.");
         }
+        else if (this.activeTab == Tab.GARITONE) {
+            int pickerX = 10;
+            pickerX += this.addScreenButton("Quick deposit slots", pickerX, () -> GuiSlotPicker.quickDepositSlots(this),
+                    "Pick the inventory slots that quick deposit and store trips never empty.") + 2;
+            pickerX += this.addScreenButton("Auto eat slots", pickerX, () -> GuiSlotPicker.autoEatSlots(this),
+                    "Pick the hotbar slots that food is moved into for eating.") + 2;
+            this.addScreenButton("Auto eat blacklist", pickerX, () -> new GuiAutoEatBlacklistEditor(this),
+                    "Pick the food that is never eaten automatically.");
+        }
+    }
+
+    private int addScreenButton(String label, int x, java.util.function.Supplier<GuiBase> screen, String... hoverLines) {
+        int w = this.getStringWidth(label) + 12;
+        ButtonGeneric btn = new ButtonGeneric(x, 50, w, 20, label, hoverLines);
+        this.addButton(btn, (button, mouseButton) -> GuiBase.openGui(screen.get()));
+        return w;
     }
 
     private int addPickerButton(String label, int x, boolean blockEsp, String... hoverLines) {
@@ -185,7 +201,7 @@ public class GuiMinemanMain extends GuiConfigsBase {
             return;
         }
         this.activeTab = tab;
-        this.setListPosition(10, tab == Tab.ESP ? ESP_LIST_Y : LIST_Y);
+        this.setListPosition(10, tab == Tab.ESP || tab == Tab.GARITONE ? PICKER_LIST_Y : LIST_Y);
         this.clearElements();
         this.reCreateListWidget();
         this.initGui();
@@ -195,9 +211,9 @@ public class GuiMinemanMain extends GuiConfigsBase {
         ALL("All"),
         GENERIC("Generic"),
         GARITONE("Garitone",
-                "Automation: auto eat, fill strategy, Smart Mineman,",
-                "Hungry Mineman, quick deposit and storing items,",
-                "with their hotkeys."),
+                "Automation: Smart Mineman, Hungry Mineman,",
+                "storage protection and auto eat, with their hotkeys,",
+                "and the slot and blacklist pickers."),
         STORAGE_POINTS("Storage Points"),
         TASK_MANAGER("Task Manager"),
         SORTING_SETTINGS("Sorting",

@@ -153,7 +153,12 @@ public class Configs {
 
         // The config screen tabs. The ESP block and entity lists are edited in the Block ESP / Entity ESP screens instead.
         public static final List<IConfigBase> OPTIONS = ImmutableList.of(MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, MUTE_ALL_SOUNDS, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, WEAPON_SWITCH_BACK_DELAY, STRUCTURE_SEARCH_RADIUS);
-        public static final List<IConfigBase> GARITONE = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, PROTECTED_STORAGE_BLOCKS, ADVANCED_AUTO_STORE_MODUS);
+        // Sorted by topic: Smart Mineman, Hungry Mineman, protection, auto eat. The slot lists and the auto eat
+        // blacklist are edited in their own screens (buttons above the list), see HIDDEN.
+        public static final List<IConfigBase> GARITONE = ImmutableList.of(SMART_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, HUNGRY_MINEMAN, PROTECT_STORAGE_POINTS, PROTECTED_STORAGE_BLOCKS, AUTO_EAT, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD);
+        // Saved, but not shown in any tab: edited in the slot picker / blacklist screens, or (fillStrategy,
+        // advancedAutoStoreModus) hidden until the storage points rework decides about them
+        public static final List<IConfigBase> HIDDEN = ImmutableList.of(QUICK_DEPOSIT_DISABLED_SLOTS, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, FILL_STRATEGY, ADVANCED_AUTO_STORE_MODUS);
         public static final List<IConfigBase> ESP = ImmutableList.of(ITEM_ESP, BLOCK_ESP, BLOCK_ESP_RADIUS, ENTITY_ESP);
         // Needs Baritone (the API build). Without it the option does nothing, and the hover text shows a red warning.
         private static ConfigBoolean baritoneOption(String name, boolean defaultValue) {
@@ -172,7 +177,7 @@ public class Configs {
         }
 
         // Saved under "Generic": all three tabs plus the ESP lists, which stay in this section so existing configs keep them
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.<IConfigBase>builder().addAll(OPTIONS).addAll(GARITONE).addAll(ESP).add(BLOCK_ESP_BLOCKS, ENTITY_ESP_ENTITIES).build();
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.<IConfigBase>builder().addAll(OPTIONS).addAll(GARITONE).addAll(HIDDEN).addAll(ESP).add(BLOCK_ESP_BLOCKS, ENTITY_ESP_ENTITIES).build();
     }
 
     /**
@@ -186,7 +191,8 @@ public class Configs {
         // IDs in the order they were last picked, newest first; the picker grids show these first
         public static final ConfigStringList BLOCK_ESP_RECENT  = new ConfigStringList("blockEspRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
         public static final ConfigStringList ENTITY_ESP_RECENT = new ConfigStringList("entityEspRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
+        public static final ConfigStringList AUTO_EAT_BLACKLIST_RECENT = new ConfigStringList("autoEatBlacklistRecent", ImmutableList.of()).apply(ESP_EDITOR_KEY);
 
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(BLOCK_ESP_COLORS, ENTITY_ESP_COLORS, BLOCK_ESP_RECENT, ENTITY_ESP_RECENT);
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(BLOCK_ESP_COLORS, ENTITY_ESP_COLORS, BLOCK_ESP_RECENT, ENTITY_ESP_RECENT, AUTO_EAT_BLACKLIST_RECENT);
     }
 }

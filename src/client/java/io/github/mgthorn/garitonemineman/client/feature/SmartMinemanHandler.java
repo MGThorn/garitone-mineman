@@ -101,6 +101,11 @@ public final class SmartMinemanHandler {
         return state == State.DEPOSITING || state == State.RESUMING;
     }
 
+    /** Every chest was full with items left over; waiting for the player to make room and resume. */
+    public static boolean isStorageFull() {
+        return storageFull;
+    }
+
     /** Human-readable progress suffix (e.g. " (chest 2/5, walking)") for the current trip, or "". */
     public static String describeProgress() {
         return switch (state) {

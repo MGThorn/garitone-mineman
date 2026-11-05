@@ -5,35 +5,58 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
 /**
- * Draws a small indicator near the hotbar while {@link MinemanPauseController} is engaged, so the
- * safety toggle's state is always visible without opening a menu: "PAUSED" in red for the player's
- * pause, "EATING" in yellow while only Hungry Mineman holds everything.
+ * One status line near the hotbar while Mineman is doing something other than just running, so the
+ * state is visible without opening the Task Manager. Most important first:
+ * <ul>
+ *   <li>"all chests full" (red): Smart Mineman is waiting for the player to make room and resume</li>
+ *   <li>"PAUSED" (red): the player's pause</li>
+ *   <li>"EATING" (yellow): only Hungry Mineman holds everything</li>
+ *   <li>"storing items (chest 2/5, walking)" (aqua): a store trip is running</li>
+ * </ul>
+ * Nothing is shown while jobs simply run.
  */
 public class PauseIndicatorRenderHandler {
-    private static final String PAUSED_TEXT = "Mineman: PAUSED";
-    private static final String EATING_TEXT = "Mineman: EATING";
+    private static final int RED = 0xFFFF5555;
+    private static final int YELLOW = 0xFFFFFF55;
+    private static final int AQUA = 0xFF55FFFF;
 
     public static void register() {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("mineman", "pause_indicator"), (graphics, tickCounter) -> {
-            if (!MinemanPauseController.isPaused()) {
-                return;
-            }
-
             Minecraft mc = Minecraft.getInstance();
+
             if (mc.player == null || mc.gui.hud.isHidden()) {
                 return;
             }
 
-            boolean userPaused = MinemanPauseController.isUserPaused();
-            String text = userPaused ? PAUSED_TEXT : EATING_TEXT;
+            String text;
+            int color;
+
+            if (SmartMinemanHandler.isStorageFull() && MinemanPauseController.isUserPaused()) {
+                text = "Mineman: all chests full, make room, then resume";
+                color = RED;
+            }
+            else if (MinemanPauseController.isUserPaused()) {
+                text = "Mineman: PAUSED";
+                color = RED;
+            }
+            else if (MinemanPauseController.isEating()) {
+                text = "Mineman: EATING";
+                color = YELLOW;
+            }
+            else if (SmartMinemanHandler.isHandlingFullInventory()) {
+                text = "Mineman: storing items" + SmartMinemanHandler.describeProgress();
+                color = AQUA;
+            }
+            else {
+                return;
+            }
+
             int screenWidth = mc.getWindow().getGuiScaledWidth();
             int screenHeight = mc.getWindow().getGuiScaledHeight();
-
-            int textWidth = mc.font.width(text);
-            int x = screenWidth / 2 - textWidth / 2;
+            int x = screenWidth / 2 - mc.font.width(text) / 2;
             int y = screenHeight - 40;
 
-            graphics.text(mc.font, text, x, y, userPaused ? 0xFFFF5555 : 0xFFFFFF55);
+            graphics.text(mc.font, text, x, y, color);
         });
     }
 }
