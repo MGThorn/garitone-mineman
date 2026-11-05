@@ -10,6 +10,7 @@ import fi.dy.masa.malilib.config.options.ConfigString;
 import fi.dy.masa.malilib.config.options.ConfigStringList;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.util.StringUtils;
+import io.github.mgthorn.garitonemineman.client.compat.BaritoneCompat;
 import io.github.mgthorn.garitonemineman.client.compat.TweakerooCompat;
 
 public class Configs {
@@ -37,12 +38,45 @@ public class Configs {
         public static final ConfigString     SELECTION_TOOL_ITEM           = new ConfigString("selectionToolItem", "minecraft:flint").apply(GENERIC_KEY);
         public static final ConfigInteger    MAX_REGION_SIZE               = new ConfigInteger("maxRegionSize", 200_000, 1, 10_000_000, false).apply(GENERIC_KEY);
         public static final ConfigOptionList FILL_STRATEGY                 = new ConfigOptionList("fillStrategy", FillStrategy.FIRST_AVAILABLE_SLOT).apply(GENERIC_KEY);
-        public static final ConfigBoolean    SMART_MINEMAN                 = new ConfigBoolean("smartMineman", false).apply(GENERIC_KEY);
-        public static final ConfigBoolean    HUNGRY_MINEMAN                = new ConfigBoolean("hungryMineman", false).apply(GENERIC_KEY);
+        public static final ConfigBoolean    SMART_MINEMAN                 = baritoneOption("smartMineman", false);
+        public static final ConfigBoolean    HUNGRY_MINEMAN                = baritoneOption("hungryMineman", false);
         public static final ConfigInteger    SMART_MINEMAN_FREE_SLOTS_THRESHOLD = new ConfigInteger("smartMinemanFreeSlotsThreshold", 1, 0, 36, true).apply(GENERIC_KEY);
         public static final ConfigString     QUICK_DEPOSIT_DISABLED_SLOTS  = new ConfigString("quickDepositDisabledSlots", "0-8,9,17,18,26,27,35").apply(GENERIC_KEY);
-        public static final ConfigBoolean    PROTECT_STORAGE_POINTS        = new ConfigBoolean("protectStoragePoints", true).apply(GENERIC_KEY);
-        public static final ConfigBoolean    HIDE_BARITONE_CHAT_FEEDBACK   = new ConfigBoolean("hideBaritoneChatFeedback", true).apply(GENERIC_KEY);
+        public static final ConfigBoolean    PROTECT_STORAGE_POINTS        = baritoneOption("protectStoragePoints", true);
+        public static final ConfigStringList PROTECTED_STORAGE_BLOCKS      = new ConfigStringList("protectedStorageBlocks", ImmutableList.of(
+                "minecraft:chest",
+                "minecraft:trapped_chest",
+                "minecraft:barrel",
+                "minecraft:ender_chest",
+                "minecraft:hopper",
+                "minecraft:dropper",
+                "minecraft:dispenser",
+                "minecraft:shulker_box",
+                "minecraft:white_shulker_box",
+                "minecraft:orange_shulker_box",
+                "minecraft:magenta_shulker_box",
+                "minecraft:light_blue_shulker_box",
+                "minecraft:yellow_shulker_box",
+                "minecraft:lime_shulker_box",
+                "minecraft:pink_shulker_box",
+                "minecraft:gray_shulker_box",
+                "minecraft:light_gray_shulker_box",
+                "minecraft:cyan_shulker_box",
+                "minecraft:purple_shulker_box",
+                "minecraft:blue_shulker_box",
+                "minecraft:brown_shulker_box",
+                "minecraft:green_shulker_box",
+                "minecraft:red_shulker_box",
+                "minecraft:black_shulker_box",
+                "minecraft:copper_chest",
+                "minecraft:exposed_copper_chest",
+                "minecraft:weathered_copper_chest",
+                "minecraft:oxidized_copper_chest",
+                "minecraft:waxed_copper_chest",
+                "minecraft:waxed_exposed_copper_chest",
+                "minecraft:waxed_weathered_copper_chest",
+                "minecraft:waxed_oxidized_copper_chest"
+        )).apply(GENERIC_KEY);
         public static final ConfigBoolean    ADVANCED_AUTO_STORE_MODUS     = new ConfigBoolean("advancedAutoStoreModus", true).apply(GENERIC_KEY);
         public static final ConfigBoolean    MUTE_ALL_SOUNDS               = new ConfigBoolean("muteAllSounds", false).apply(GENERIC_KEY);
         public static final ConfigBoolean    ITEM_ESP                      = new ConfigBoolean("itemEsp", false).apply(GENERIC_KEY);
@@ -117,7 +151,28 @@ public class Configs {
         public static final ConfigInteger    WEAPON_SWITCH_BACK_DELAY       = new ConfigInteger("weaponSwitchBackDelay", 20, 0, 200, true).apply(GENERIC_KEY);
         public static final ConfigInteger    STRUCTURE_SEARCH_RADIUS        = new ConfigInteger("structureSearchRadius", 5000, 256, 30000, false).apply(GENERIC_KEY);
 
-        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, HIDE_BARITONE_CHAT_FEEDBACK, ADVANCED_AUTO_STORE_MODUS, MUTE_ALL_SOUNDS, ITEM_ESP, BLOCK_ESP, BLOCK_ESP_BLOCKS, BLOCK_ESP_RADIUS, ENTITY_ESP, ENTITY_ESP_ENTITIES, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, WEAPON_SWITCH_BACK_DELAY, STRUCTURE_SEARCH_RADIUS);
+        // The config screen tabs. The ESP block and entity lists are edited in the Block ESP / Entity ESP screens instead.
+        public static final List<IConfigBase> OPTIONS = ImmutableList.of(MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, MUTE_ALL_SOUNDS, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, WEAPON_SWITCH_BACK_DELAY, STRUCTURE_SEARCH_RADIUS);
+        public static final List<IConfigBase> GARITONE = ImmutableList.of(AUTO_EAT, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD, FILL_STRATEGY, SMART_MINEMAN, HUNGRY_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, QUICK_DEPOSIT_DISABLED_SLOTS, PROTECT_STORAGE_POINTS, PROTECTED_STORAGE_BLOCKS, ADVANCED_AUTO_STORE_MODUS);
+        public static final List<IConfigBase> ESP = ImmutableList.of(ITEM_ESP, BLOCK_ESP, BLOCK_ESP_RADIUS, ENTITY_ESP);
+        // Needs Baritone (the API build). Without it the option does nothing, and the hover text shows a red warning.
+        private static ConfigBoolean baritoneOption(String name, boolean defaultValue) {
+            return new ConfigBoolean(name, defaultValue) {
+                @Override
+                public String getComment() {
+                    String warningKey = BaritoneCompat.getWarningKey();
+
+                    if (warningKey == null) {
+                        return super.getComment();
+                    }
+
+                    return super.getComment() + "\n" + GuiBase.TXT_RED + StringUtils.translate(warningKey) + GuiBase.TXT_RST;
+                }
+            }.apply(GENERIC_KEY);
+        }
+
+        // Saved under "Generic": all three tabs plus the ESP lists, which stay in this section so existing configs keep them
+        public static final List<IConfigBase> CONFIG_LIST = ImmutableList.<IConfigBase>builder().addAll(OPTIONS).addAll(GARITONE).addAll(ESP).add(BLOCK_ESP_BLOCKS, ENTITY_ESP_ENTITIES).build();
     }
 
     /**

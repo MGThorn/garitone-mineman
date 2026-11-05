@@ -278,7 +278,7 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
     }
 
     private void sendBaritoneGoTo() {
-        BaritoneController.sendGoTo(new BlockPos(this.storagePoint.getX(), this.storagePoint.getY(), this.storagePoint.getZ()));
+        BaritoneController.travelTo(new BlockPos(this.storagePoint.getX(), this.storagePoint.getY(), this.storagePoint.getZ()));
         this.closeGui(false);
     }
 

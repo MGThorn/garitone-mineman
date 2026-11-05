@@ -141,20 +141,15 @@ public class InitHandler implements IInitializationHandler {
 
         Hotkeys.PAUSE_RESUME_TOGGLE.getKeybind().setCallback(
             (action, key) -> {
+                // Baritone reads this through our pause process, so nothing else needs to be told
                 MinemanPauseController.toggle();
-                boolean pausedNow = MinemanPauseController.isPaused();
-
-                if (pausedNow) {
-                    BaritoneController.pause();
-                }
-                else {
-                    BaritoneController.resume();
-                }
+                boolean pausedNow = MinemanPauseController.isUserPaused();
 
                 var player = Minecraft.getInstance().player;
                 if (player != null) {
-                    player.sendOverlayMessage(
-                        Component.literal(pausedNow ? "Mineman: PAUSED" : "Mineman: RESUMED"));
+                    String message = pausedNow ? "Mineman: PAUSED"
+                            : MinemanPauseController.isEating() ? "Mineman: RESUMED (after eating)" : "Mineman: RESUMED";
+                    player.sendOverlayMessage(Component.literal(message));
                 }
                 return true;
             }
@@ -201,7 +196,7 @@ public class InitHandler implements IInitializationHandler {
                     return true;
                 }
 
-                BaritoneController.sendGoTo(new BlockPos(point.getX(), point.getY(), point.getZ()));
+                BaritoneController.travelTo(new BlockPos(point.getX(), point.getY(), point.getZ()));
                 return true;
             }
         );

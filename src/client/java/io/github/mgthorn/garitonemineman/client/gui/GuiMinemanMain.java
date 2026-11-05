@@ -21,6 +21,10 @@ import io.github.mgthorn.garitonemineman.client.config.Configs;
 import io.github.mgthorn.garitonemineman.client.config.Hotkeys;
 
 public class GuiMinemanMain extends GuiConfigsBase {
+    private static final int LIST_Y = 50;
+    // The ESP tab has a row with the Block ESP / Entity ESP picker buttons above its list
+    private static final int ESP_LIST_Y = 74;
+
     private Tab activeTab = Tab.ALL;
 
     public GuiMinemanMain() {
@@ -28,7 +32,7 @@ public class GuiMinemanMain extends GuiConfigsBase {
     }
 
     public GuiMinemanMain(@Nullable Screen parent) {
-        super(10, 50, Reference.MOD_ID, parent, Reference.MOD_NAME);
+        super(10, LIST_Y, Reference.MOD_ID, parent, Reference.MOD_NAME);
     }
 
     @Override
@@ -39,15 +43,48 @@ public class GuiMinemanMain extends GuiConfigsBase {
         int y = 26;
 
         for (Tab tab : Tab.values()) {
-            int w = this.getStringWidth(tab.displayName) + 12;
-            ButtonGeneric btn = new ButtonGeneric(x, y, w, 20, tab.displayName, tab.hoverLines);
-            boolean disabled = tab == this.activeTab
-                    || ((tab == Tab.STORAGE_POINTS || tab == Tab.TASK_MANAGER || tab == Tab.SORTING_SETTINGS || tab == Tab.STRUCTURES) && this.mc.player == null)
-                    || (tab == Tab.STRUCTURES && !JourneyMapCompat.isLoaded());
-            btn.setEnabled(!disabled);
-            this.addButton(btn, new TabListener(tab));
-            x += w + 2;
+            if (tab == Tab.TASK_MANAGER) {
+                continue;
+            }
+            x += this.addTabButton(tab, x, y) + 2;
         }
+
+        // Task Manager sits on its own in the bottom right corner, below the config list
+        Tab tab = Tab.TASK_MANAGER;
+        int w = this.getStringWidth(tab.displayName) + 12;
+        this.addTabButton(tab, this.width - 10 - w, this.height - 26);
+
+        if (this.activeTab == Tab.ESP) {
+            int pickerX = 10;
+            pickerX += this.addPickerButton("Block ESP", pickerX, true,
+                    "Pick the blocks that blockEsp highlights.") + 2;
+            this.addPickerButton("Entity ESP", pickerX, false,
+                    "Pick the entities that entityEsp highlights.",
+                    "Entity models are only shown while you're in a world.");
+        }
+    }
+
+    private int addPickerButton(String label, int x, boolean blockEsp, String... hoverLines) {
+        int w = this.getStringWidth(label) + 12;
+        ButtonGeneric btn = new ButtonGeneric(x, 50, w, 20, label, hoverLines);
+        this.addButton(btn, (button, mouseButton) -> GuiBase.openGui(blockEsp ? new GuiBlockEspEditor(this) : new GuiEntityEspEditor(this)));
+        return w;
+    }
+
+    @Override
+    protected int getBrowserHeight() {
+        return this.height - 30 - this.getListY();
+    }
+
+    private int addTabButton(Tab tab, int x, int y) {
+        int w = this.getStringWidth(tab.displayName) + 12;
+        ButtonGeneric btn = new ButtonGeneric(x, y, w, 20, tab.displayName, tab.hoverLines);
+        boolean disabled = tab == this.activeTab
+                || ((tab == Tab.STORAGE_POINTS || tab == Tab.TASK_MANAGER || tab == Tab.SORTING_SETTINGS || tab == Tab.STRUCTURES) && this.mc.player == null)
+                || (tab == Tab.STRUCTURES && !JourneyMapCompat.isLoaded());
+        btn.setEnabled(!disabled);
+        this.addButton(btn, new TabListener(tab));
+        return w;
     }
 
     @Override
@@ -92,12 +129,24 @@ public class GuiMinemanMain extends GuiConfigsBase {
     public List<ConfigOptionWrapper> getConfigs() {
         switch (this.activeTab) {
             case GENERIC:
-                return ConfigOptionWrapper.createFor(Configs.Generic.CONFIG_LIST);
-            case HOTKEYS:
-                return ConfigOptionWrapper.createFor(Hotkeys.HOTKEY_LIST);
+                return ConfigOptionWrapper.createFor(Configs.Generic.OPTIONS);
+            case GARITONE: {
+                List<ConfigOptionWrapper> list = new java.util.ArrayList<>();
+                list.addAll(ConfigOptionWrapper.createFor(Configs.Generic.GARITONE));
+                list.addAll(ConfigOptionWrapper.createFor(Hotkeys.GARITONE_HOTKEYS));
+                return list;
+            }
+            case ESP: {
+                List<ConfigOptionWrapper> list = new java.util.ArrayList<>();
+                list.addAll(ConfigOptionWrapper.createFor(Configs.Generic.ESP));
+                list.addAll(ConfigOptionWrapper.createFor(Hotkeys.ESP_HOTKEYS));
+                return list;
+            }
             case ALL: {
                 List<ConfigOptionWrapper> list = new java.util.ArrayList<>();
-                list.addAll(ConfigOptionWrapper.createFor(Configs.Generic.CONFIG_LIST));
+                list.addAll(ConfigOptionWrapper.createFor(Configs.Generic.OPTIONS));
+                list.addAll(ConfigOptionWrapper.createFor(Configs.Generic.GARITONE));
+                list.addAll(ConfigOptionWrapper.createFor(Configs.Generic.ESP));
                 list.addAll(ConfigOptionWrapper.createFor(Hotkeys.HOTKEY_LIST));
                 return list;
             }
@@ -128,14 +177,6 @@ public class GuiMinemanMain extends GuiConfigsBase {
             GuiBase.openGui(new GuiInventorySortConfig(this));
             return;
         }
-        if (tab == Tab.BLOCK_ESP) {
-            GuiBase.openGui(new GuiBlockEspEditor(this));
-            return;
-        }
-        if (tab == Tab.ENTITY_ESP) {
-            GuiBase.openGui(new GuiEntityEspEditor(this));
-            return;
-        }
         if (tab == Tab.STRUCTURES) {
             if (this.mc.player == null || !JourneyMapCompat.isLoaded()) {
                 return;
@@ -144,6 +185,7 @@ public class GuiMinemanMain extends GuiConfigsBase {
             return;
         }
         this.activeTab = tab;
+        this.setListPosition(10, tab == Tab.ESP ? ESP_LIST_Y : LIST_Y);
         this.clearElements();
         this.reCreateListWidget();
         this.initGui();
@@ -152,19 +194,20 @@ public class GuiMinemanMain extends GuiConfigsBase {
     private enum Tab {
         ALL("All"),
         GENERIC("Generic"),
-        HOTKEYS("Hotkeys"),
+        GARITONE("Garitone",
+                "Automation: auto eat, fill strategy, Smart Mineman,",
+                "Hungry Mineman, quick deposit and storing items,",
+                "with their hotkeys."),
         STORAGE_POINTS("Storage Points"),
         TASK_MANAGER("Task Manager"),
-        SORTING_SETTINGS("Sorting Settings",
+        SORTING_SETTINGS("Sorting",
                 "Configure which item belongs in each of your inventory slots.",
                 "When Item Scroller's sortInventory hotkey is pressed, those slots",
                 "are filled in first (the best tool tier wins for tool slots),",
                 "then the rest of your inventory is sorted normally."),
-        BLOCK_ESP("Block ESP",
-                "Pick the blocks that blockEsp highlights."),
-        ENTITY_ESP("Entity ESP",
-                "Pick the entities that entityEsp highlights.",
-                "Entity models are only shown while you're in a world."),
+        ESP("ESP",
+                "Item, Block and Entity ESP settings and hotkeys,",
+                "and the Block ESP / Entity ESP pickers."),
         STRUCTURES("Structures",
                 "Create JourneyMap waypoints for structures, found from the world seed.",
                 "Needs to be in a world. The seed comes from MiniHUD,",

@@ -10,7 +10,7 @@ import net.minecraft.world.phys.HitResult;
 import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneController;
 
 /**
- * While a Baritone #mine or #sel fill air job is running, watches the block currently being broken
+ * While a Baritone mine or build job (#mine, any #sel command, #build, Litematica) is running, watches the block currently being broken
  * (the crosshair target while the attack key is held). Blocks that don't require a correct tool for
  * their normal drop (dirt, etc.) are left alone entirely. For ones that do (stone needing a pickaxe,
  * etc.), if the currently held item isn't a correct tool for it — typically because Baritone's own
@@ -38,9 +38,9 @@ public final class MissingToolCancelHandler {
 
         BaritoneController.JobType jobType = BaritoneController.getPrimaryJobType();
         boolean relevantJob = jobType == BaritoneController.JobType.MINE
-                || jobType == BaritoneController.JobType.SEL_FILL_AIR;
+                || jobType == BaritoneController.JobType.BUILD;
 
-        if (relevantJob == false || BaritoneController.isPaused()) {
+        if (relevantJob == false || BaritoneController.isPrimaryJobPaused()) {
             reset();
             return;
         }

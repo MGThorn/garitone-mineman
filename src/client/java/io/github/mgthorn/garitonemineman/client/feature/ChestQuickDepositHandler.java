@@ -17,24 +17,35 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import io.github.mgthorn.garitonemineman.client.compat.ItemScrollerCompat;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
+import io.github.mgthorn.garitonemineman.client.config.FillStrategy;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
 
 /**
- * Turns the player's view toward a target storage block, right-clicks it open, shift-clicks every
- * stack out of the player's inventory into it one slot per tick (skipping slots listed in
- * {@link Configs.Generic#QUICK_DEPOSIT_DISABLED_SLOTS}), then closes it. No travel is performed here.
- * Deliberately paced to one real click per tick rather than firing all of them in a single burst —
- * a real dedicated server can (and often does) silently reject a flood of container clicks sent
- * within the same tick, which otherwise looked fine locally (client-side prediction) right up until
- * the server's own resync quietly undid all of it.
+ * Turns the player's view toward a target storage block, right-clicks it open, shift-clicks the
+ * player's items into it (skipping slots listed in {@link Configs.Generic#QUICK_DEPOSIT_DISABLED_SLOTS}),
+ * then closes it. No travel is performed here.
+ *
+ * The block counts as visible if any point of it can be seen, not only its centre: every face of its
+ * real shape is tried (see {@link #findVisibleHit}), and the click goes to the point that was hit.
+ *
+ * Depositing looks at the inventory again before every click, so it keeps going until no selected
+ * slot has anything the chest can still take (slot rules included), instead of clicking each slot
+ * once. A click that changes nothing marks that slot as stuck for this chest, so it can't loop.
+ * Clicks are paced (see {@link ItemScrollerCompat#getClicksPerTick()}): a real dedicated server can
+ * silently reject a flood of container clicks sent within the same tick, which otherwise looked fine
+ * locally (client-side prediction) right up until the server's own resync quietly undid all of it.
  *
  * Two ways to drive it:
  * <ul>
@@ -64,15 +75,14 @@ public final class ChestQuickDepositHandler {
     private enum State { IDLE, OPEN, WAIT_OPEN, DEPOSITING }
 
     private static State state = State.IDLE;
+    @Nullable private static StorageBlockEntry targetEntry;
     private static List<BlockPos> targetPositions = List.of();
     private static int waitTicks;
     private static int sightBlockedTicks;
     @Nullable private static Result lastResult;
 
-    // Slots (menu-index space) still queued to deposit, one per tick — see depositAllItems' doc comment
-    // for why this can't just loop through them all in a single tick.
-    private static List<Integer> depositQueue = List.of();
-    private static int depositIndex;
+    // Menu slots whose click moved nothing into the open chest; skipped for the rest of this chest
+    private static Set<Integer> stuckSlots = new HashSet<>();
 
     // "Simple" mode only (advancedAutoStoreModus disabled): the full ordered list of usable storage
     // blocks for the current tryQuickDeposit() call. Worked through one at a time regardless of each
@@ -142,6 +152,7 @@ public final class ChestQuickDepositHandler {
             return;
         }
 
+        targetEntry = entry;
         targetPositions = orderedPositions(entry);
         lastResult = null;
         sightBlockedTicks = 0;
@@ -221,7 +232,7 @@ public final class ChestQuickDepositHandler {
                 // through to the other one immediately — only once *neither* half is reachable/visible
                 // does this give up with TOO_FAR/BLOCKED.
                 BlockPos reachablePos = null;
-                BlockPos visiblePos = null;
+                BlockHitResult visibleHit = null;
 
                 for (BlockPos candidate : targetPositions) {
                     if (isWithinReach(player, candidate) == false) {
@@ -232,8 +243,9 @@ public final class ChestQuickDepositHandler {
                         reachablePos = candidate;
                     }
 
-                    if (hasLineOfSight(player, candidate)) {
-                        visiblePos = candidate;
+                    visibleHit = findVisibleHit(player, candidate);
+
+                    if (visibleHit != null) {
                         break;
                     }
                 }
@@ -243,10 +255,8 @@ public final class ChestQuickDepositHandler {
                     return;
                 }
 
-                BlockPos lookTarget = visiblePos != null ? visiblePos : reachablePos;
-                player.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(lookTarget));
-
-                if (visiblePos == null) {
+                if (visibleHit == null) {
+                    player.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(reachablePos));
                     sightBlockedTicks++;
 
                     // A single blocked frame right as Baritone parks the player (still settling into
@@ -261,9 +271,8 @@ public final class ChestQuickDepositHandler {
                 }
 
                 sightBlockedTicks = 0;
-
-                BlockHitResult hitResult = new BlockHitResult(Vec3.atCenterOf(visiblePos), Direction.UP, visiblePos, false);
-                mc.gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hitResult);
+                player.lookAt(EntityAnchorArgument.Anchor.EYES, visibleHit.getLocation());
+                mc.gameMode.useItemOn(player, InteractionHand.MAIN_HAND, visibleHit);
                 waitTicks = 0;
                 state = State.WAIT_OPEN;
             }
@@ -271,8 +280,7 @@ public final class ChestQuickDepositHandler {
                 waitTicks++;
 
                 if (player.containerMenu != player.inventoryMenu) {
-                    depositQueue = buildDepositQueue(player.containerMenu);
-                    depositIndex = 0;
+                    stuckSlots = new HashSet<>();
                     state = State.DEPOSITING;
                 }
                 else if (waitTicks >= OPEN_WAIT_TIMEOUT_TICKS) {
@@ -287,26 +295,30 @@ public final class ChestQuickDepositHandler {
                     return;
                 }
 
-                if (depositIndex >= depositQueue.size()) {
-                    player.closeContainer();
+                AbstractContainerMenu menu = player.containerMenu;
 
-                    if (mc.gui.screen() != null) {
-                        mc.gui.setScreen(null);
+                for (int click = 0; click < ItemScrollerCompat.getClicksPerTick(); click++) {
+                    int slotId = findNextDepositSlot(menu);
+
+                    if (slotId == -1) {
+                        // Nothing left that this chest can take: the selected slots are empty, or it's full
+                        player.closeContainer();
+
+                        if (mc.gui.screen() != null) {
+                            mc.gui.setScreen(null);
+                        }
+
+                        advanceOrFinish(player, Result.SUCCESS, null);
+                        return;
                     }
 
-                    advanceOrFinish(player, Result.SUCCESS, null);
-                    return;
-                }
+                    ItemStack before = menu.getSlot(slotId).getItem().copy();
+                    mc.gameMode.handleContainerInput(menu.containerId, slotId, 0, ContainerInput.QUICK_MOVE, player);
 
-                // One shift-click per tick, not all 36 in a single burst: a real dedicated server can
-                // (and commonly does, via anti-cheat or its own click-rate limiting) silently reject a
-                // flood of container clicks sent within the same tick, undoing the whole deposit right
-                // back to how it started even though the client's own prediction briefly looked correct.
-                // Pacing to real-click cadence survives that — it's the same reason this doesn't just
-                // loop over depositQueue in WAIT_OPEN like it used to.
-                int slotId = depositQueue.get(depositIndex);
-                depositIndex++;
-                mc.gameMode.handleContainerInput(player.containerMenu.containerId, slotId, 0, ContainerInput.QUICK_MOVE, player);
+                    if (ItemStack.matches(before, menu.getSlot(slotId).getItem())) {
+                        stuckSlots.add(slotId);
+                    }
+                }
             }
             case IDLE -> {}
         }
@@ -317,36 +329,109 @@ public final class ChestQuickDepositHandler {
         return new AABB(pos).distanceToSqr(player.getEyePosition()) <= reach * reach;
     }
 
-    private static boolean hasLineOfSight(Player player, BlockPos pos) {
-        Vec3 start = player.getEyePosition();
-        Vec3 end = Vec3.atCenterOf(pos);
-        BlockHitResult result = player.level().clip(
-                new ClipContext(start, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
-        return result.getType() == HitResult.Type.BLOCK && pos.equals(result.getBlockPos());
-    }
+    /**
+     * A hit on {@code pos} that the player can click from where they stand, or null if every point is
+     * hidden. Tries the centre first, then the centre and four inner points of each face of the
+     * block's real shape (a chest is smaller than a full block). Each ray ends a little inside the
+     * shape, so it actually reaches the face instead of stopping just short of it.
+     */
+    @Nullable
+    private static BlockHitResult findVisibleHit(Player player, BlockPos pos) {
+        Level level = player.level();
+        VoxelShape shape = level.getBlockState(pos).getShape(level, pos);
+        AABB box = shape.isEmpty() ? new AABB(pos) : shape.bounds().move(pos);
+        Vec3 eye = player.getEyePosition();
+        double reach = player.blockInteractionRange();
 
-    /** Menu-index slots (player inventory range) worth shift-clicking, in order, skipping empty/disabled ones. */
-    private static List<Integer> buildDepositQueue(AbstractContainerMenu menu) {
-        int containerSlotCount = menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT;
+        List<Vec3> targets = new ArrayList<>();
+        targets.add(box.getCenter());
 
-        if (containerSlotCount <= 0) {
-            return List.of();
+        for (Direction face : Direction.values()) {
+            for (double[] offset : FACE_POINT_OFFSETS) {
+                targets.add(pointOnFace(box, face, offset[0], offset[1]));
+            }
         }
 
-        Set<Integer> disabledSlots = parseDisabledSlots();
-        List<Integer> queue = new ArrayList<>();
+        for (Vec3 target : targets) {
+            double distance = eye.distanceTo(target);
 
-        for (int i = containerSlotCount; i < menu.slots.size(); i++) {
-            Slot slot = menu.getSlot(i);
-
-            if (disabledSlots.contains(slot.getContainerSlot()) || slot.getItem().isEmpty()) {
+            if (distance > reach || distance < 0.01) {
                 continue;
             }
 
-            queue.add(i);
+            Vec3 end = eye.add(target.subtract(eye).scale((distance + RAY_OVERSHOOT) / distance));
+            BlockHitResult result = level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+
+            if (result.getType() == HitResult.Type.BLOCK && pos.equals(result.getBlockPos())) {
+                return result;
+            }
         }
 
-        return queue;
+        return null;
+    }
+
+    private static final double RAY_OVERSHOOT = 0.05;
+    // Centre and four inner points of a face, as fractions along its two axes
+    private static final double[][] FACE_POINT_OFFSETS = { {0.5, 0.5}, {0.25, 0.25}, {0.25, 0.75}, {0.75, 0.25}, {0.75, 0.75} };
+
+    private static Vec3 pointOnFace(AABB box, Direction face, double u, double v) {
+        return switch (face.getAxis()) {
+            case X -> new Vec3(face == Direction.WEST ? box.minX : box.maxX,
+                    Mth.lerp(u, box.minY, box.maxY), Mth.lerp(v, box.minZ, box.maxZ));
+            case Y -> new Vec3(Mth.lerp(u, box.minX, box.maxX),
+                    face == Direction.DOWN ? box.minY : box.maxY, Mth.lerp(v, box.minZ, box.maxZ));
+            case Z -> new Vec3(Mth.lerp(u, box.minX, box.maxX),
+                    Mth.lerp(v, box.minY, box.maxY), face == Direction.NORTH ? box.minZ : box.maxZ);
+        };
+    }
+
+    /**
+     * The next player-inventory slot (menu index) to shift-click into the open chest: not disabled,
+     * not empty, not stuck, and with somewhere in the chest to go (respecting the chest's slot rules).
+     * Looked up fresh before every click, so leftovers of a stack that only partly fit are tried again
+     * as long as the chest has room. -1 when nothing is left to deposit here.
+     */
+    private static int findNextDepositSlot(AbstractContainerMenu menu) {
+        int containerSlotCount = menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT;
+
+        if (containerSlotCount <= 0) {
+            return -1;
+        }
+
+        Set<Integer> disabledSlots = parseDisabledSlots();
+
+        for (int i = containerSlotCount; i < menu.slots.size(); i++) {
+            Slot slot = menu.getSlot(i);
+            ItemStack stack = slot.getItem();
+
+            if (stack.isEmpty() || disabledSlots.contains(slot.getContainerSlot()) || stuckSlots.contains(i)) {
+                continue;
+            }
+
+            if (chestHasRoomFor(menu, containerSlotCount, stack)) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static boolean chestHasRoomFor(AbstractContainerMenu menu, int containerSlotCount, ItemStack stack) {
+        if (targetEntry != null && targetEntry.hasRules()) {
+            return ContainerDepositHelper.findDestinationSlot(
+                    menu, containerSlotCount, targetEntry, stack, FillStrategy.FIRST_AVAILABLE_SLOT) != -1;
+        }
+
+        for (int i = 0; i < containerSlotCount; i++) {
+            ItemStack existing = menu.getSlot(i).getItem();
+
+            if (existing.isEmpty()
+                    || (ItemStack.isSameItemSameComponents(existing, stack) && existing.getCount() < existing.getMaxStackSize())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -431,11 +516,11 @@ public final class ChestQuickDepositHandler {
     private static void finish(Result result) {
         lastResult = result;
         state = State.IDLE;
+        targetEntry = null;
         targetPositions = List.of();
         waitTicks = 0;
         sightBlockedTicks = 0;
-        depositQueue = List.of();
-        depositIndex = 0;
+        stuckSlots = new HashSet<>();
         sequentialQueue = List.of();
         sequentialIndex = 0;
         sequentialMode = false;
@@ -443,11 +528,11 @@ public final class ChestQuickDepositHandler {
 
     private static void reset() {
         state = State.IDLE;
+        targetEntry = null;
         targetPositions = List.of();
         waitTicks = 0;
         sightBlockedTicks = 0;
-        depositQueue = List.of();
-        depositIndex = 0;
+        stuckSlots = new HashSet<>();
         sequentialQueue = List.of();
         sequentialIndex = 0;
         sequentialMode = false;

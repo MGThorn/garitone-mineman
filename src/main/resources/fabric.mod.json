@@ -40,6 +40,7 @@
 		"malilib": ">=0.30.2"
 	},
 	"suggests": {
+		"baritone": ">=1.20.0",
 		"itemscroller": ">=0.33.1",
 		"tweakeroo": ">=0.30.1",
 		"litematica": ">=0.29.1",

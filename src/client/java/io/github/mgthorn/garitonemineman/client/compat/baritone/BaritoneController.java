@@ -1,328 +1,308 @@
 package io.github.mgthorn.garitonemineman.client.compat.baritone;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
+import io.github.mgthorn.garitonemineman.client.compat.BaritoneCompat;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 import io.github.mgthorn.garitonemineman.client.feature.MinemanPauseController;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
 
 /**
- * The single class allowed to talk to Baritone. Everything goes through its chat-command protocol
- * (the bundled jar's public API surface is too thin/obfuscated to call directly — see the plan's
- * Context section) — job state is tracked purely from what this mod itself last issued, or observed
- * from the player's own manually typed chat commands (see {@link #observeManualChatCommand}), rather
- * than queried from Baritone. Goal arrival is detected by polling the player's own position.
+ * The one entry point to Baritone for the rest of the mod. Talks to Baritone through its API (via
+ * {@link BaritoneBridge}), never through chat commands, and does nothing when Baritone isn't installed
+ * or is the standalone build (see {@code BaritoneCompat}).
  *
- * Two independent things are tracked here, and {@link #pause()}/{@link #resume()} babysit both:
+ * Job state is read from Baritone itself, so jobs started any way (typed commands, Baritone's GUI,
+ * Litematica) are seen. Three things are tracked here:
  * <ul>
- *   <li>The <b>primary job</b> (mine / sel fill air / a manually-typed goal walk), for
- *       SmartMineman/HungryMineman.</li>
- *   <li><b>Ad-hoc navigation</b> ({@link #sendGoal}/{@link #sendGoTo}), used for one-off storage-point
- *       travel (GUI buttons, hotkeys, and per-chest travel during Store Items) — this never touches
- *       the primary job's own state, so pausing to walk to a chest doesn't corrupt a paused mining
- *       job's resume data. If both are interrupted by the same {@link #pause()} (e.g. the primary job
- *       was suspended for a Store Items trip, and the trip's own travel gets caught by the global
- *       pause toggle too), {@link #resume()} continues the ad-hoc travel first and leaves the primary
- *       job remembered/paused until whatever finishes that trip resumes it explicitly.</li>
+ *   <li>The <b>job hold</b> ({@link #holdJob()}/{@link #releaseJob()}): keeps the running job waiting
+ *       during a Smart Mineman store trip. The job is suspended, not cancelled, and continues by itself
+ *       once released.</li>
+ *   <li>The <b>nav goal</b> ({@link #sendGoTo}/{@link #travelTo}): storage point and chest travel, run
+ *       above the job hold, so the player walks while the job waits.</li>
+ *   <li>Storage point protection: the protected storage blocks are never broken anywhere, and during
+ *       our own store trip nothing is broken or placed near a storage point.</li>
  * </ul>
+ * The global pause hotkey only needs {@link MinemanPauseController}: our highest-priority Baritone
+ * process reads it and freezes everything, travel included.
  */
 public final class BaritoneController {
     private BaritoneController() {}
 
-    public enum JobType { NONE, MINE, SEL_FILL_AIR, GOAL }
+    public enum JobType {
+        NONE, MINE, BUILD, FARM, GOAL, OTHER;
 
-    // ---- primary job: the one job pause()/resume() babysits ----
-    private static JobType primaryJobType = JobType.NONE;
-    @Nullable private static String primaryMineArgs;
-    private static boolean paused;
+        /** Jobs that break blocks and fill the inventory, so Smart Mineman store trips make sense for them. */
+        public boolean breaksBlocks() {
+            return this == MINE || this == BUILD || this == FARM;
+        }
+    }
 
-    // ---- ad-hoc navigation: independent of the primary job above ----
+    private static boolean jobHeld;
+
     @Nullable private static BlockPos navGoal;
-    @Nullable private static BlockPos navLastPos;
-    private static int navStationaryTicks;
-    private static boolean navPaused;
-    private static final int ARRIVAL_STATIONARY_TICKS = 10;
-    private static final double ARRIVAL_RADIUS_SQ = 4.0;
+    // Manual travel (hotkey/GUI) ends by itself on arrival; Smart Mineman clears its own goals
+    private static boolean navClearOnArrival;
+    // Baritone couldn't calculate a path to the current nav goal
+    private static boolean navFailed;
 
-    // ---- storage point break/place protection: independent of both the above ----
     private static boolean insideProtectedStoragePoint = false;
+    private static boolean savedAllowBreak = true;
+    private static boolean savedAllowPlace = true;
 
-    // ---- chat feedback suppression: independent of everything above ----
-    // Baritone's command echo ("> #command") and its result confirmation ("Successfully set X to Y",
-    // etc.) are printed unconditionally by Baritone itself, gated by none of its own settings — the
-    // only way to hide them is to intercept them client-side (see MixinChatComponent). Every command
-    // this mod sends goes through sendChat() below, so a short suppression window opened there catches
-    // all of it, for every command (#mine, #cancel, #goal, #path, #sel, #set, ...), not just specific
-    // ones. Baritone processes "#" commands synchronously within the same call, so a couple of ticks
-    // of margin is more than enough.
-    private static final int CHAT_FEEDBACK_SUPPRESS_TICKS = 3;
-    private static int chatFeedbackSuppressTicksRemaining = 0;
+    // The protectedStorageBlocks IDs last put into Baritone's never-break list, and the blocks we added there
+    @Nullable private static List<String> appliedProtectedIds;
+    private static Set<Block> addedDisallowedBlocks = Set.of();
 
-    // ---- primary job control ----
+    // ---- jobs ----
 
-    public static void startMine(String args) {
-        primaryJobType = JobType.MINE;
-        primaryMineArgs = args;
-        paused = false;
-        sendChat("#mine " + args);
+    private static boolean isAvailable() {
+        return BaritoneCompat.isLoaded() && Minecraft.getInstance().player != null;
     }
 
-    public static void startSelFillAir() {
-        primaryJobType = JobType.SEL_FILL_AIR;
-        primaryMineArgs = null;
-        paused = false;
-        sendChat("#sel fill air");
+    /** Starts mining the given blocks, like {@code #mine}. */
+    public static void startMine(String... blockNames) {
+        if (isAvailable()) {
+            BaritoneBridge.startMine(blockNames);
+        }
     }
 
-    public static boolean isJobActive() {
-        return primaryJobType != JobType.NONE && paused == false;
+    /** Clears the area between the two corners, like {@code #sel cleararea}. */
+    public static void startClearArea(BlockPos corner1, BlockPos corner2) {
+        if (isAvailable()) {
+            BaritoneBridge.startClearArea(corner1, corner2);
+        }
     }
 
     public static JobType getPrimaryJobType() {
-        return primaryJobType;
+        return isAvailable() ? BaritoneBridge.currentJobType() : JobType.NONE;
     }
 
-    /** Whether an ad-hoc nav goal (storage-point travel) is currently tracked, paused or not. */
+    /** Baritone's own name for the running job, or null if none is running. */
+    @Nullable
+    public static String getJobName() {
+        return isAvailable() ? BaritoneBridge.currentJobName() : null;
+    }
+
+    /** A job is running and not held for a store trip. */
+    public static boolean isJobActive() {
+        return jobHeld == false && getPrimaryJobType() != JobType.NONE;
+    }
+
+    /** A mine, build or farm job is running and not held for a store trip (what Smart Mineman watches). */
+    public static boolean isBlockBreakingJobActive() {
+        return jobHeld == false && getPrimaryJobType().breaksBlocks();
+    }
+
+    /** Whether the running job (if any) is waiting: held, globally paused, or a paused build. */
+    public static boolean isPrimaryJobPaused() {
+        if (getPrimaryJobType() == JobType.NONE) {
+            return false;
+        }
+
+        return jobHeld || MinemanPauseController.isPaused() || BaritoneBridge.isBuilderPaused();
+    }
+
+    // ---- job hold ----
+
+    /** Keeps the running job waiting (without cancelling it) until {@link #releaseJob()}. */
+    public static void holdJob() {
+        jobHeld = true;
+    }
+
+    /** Lets the job continue. The store trip protection ends right here, before Baritone's next tick. */
+    public static void releaseJob() {
+        jobHeld = false;
+        refreshTripProtection();
+    }
+
+    public static boolean isJobHeld() {
+        return jobHeld;
+    }
+
+    /**
+     * Drops the job hold and nav goal. Used by {@code MinemanCancelController} for a full stop.
+     *
+     * @param cancelBaritone whether to also cancel Baritone's own job. Pass false when the player just
+     *                       typed {@code #cancel}/{@code #stop}, which Baritone handles by itself.
+     */
+    public static void cancelAll(boolean cancelBaritone) {
+        jobHeld = false;
+        clearNavGoal();
+
+        if (cancelBaritone && isAvailable()) {
+            BaritoneBridge.cancelEverything();
+        }
+    }
+
+    // ---- travel ----
+
+    /** Sets Baritone's goal next to {@code pos} without walking, like {@code #goal}. */
+    public static void sendGoal(BlockPos pos) {
+        if (isAvailable()) {
+            BaritoneBridge.setGoal(pos);
+        }
+    }
+
+    /** Walks next to {@code pos} and stays there until {@link #clearNavGoal()} (Smart Mineman). */
+    public static void sendGoTo(BlockPos pos) {
+        navGoal = pos;
+        navClearOnArrival = false;
+        navFailed = false;
+    }
+
+    /** Walks next to {@code pos} and ends the travel on arrival (hotkey and GUI). */
+    public static void travelTo(BlockPos pos) {
+        navGoal = pos;
+        navClearOnArrival = true;
+        navFailed = false;
+    }
+
+    @Nullable
+    static BlockPos getNavGoal() {
+        return navGoal;
+    }
+
     public static boolean hasActiveNavGoal() {
         return navGoal != null;
     }
 
-    @Nullable
-    public static String getPrimaryMineArgs() {
-        return primaryMineArgs;
+    /** Baritone found no path to the nav goal (or isn't usable at all), so waiting for arrival is pointless. */
+    public static boolean hasNavGoalFailed() {
+        return navGoal != null && (navFailed || BaritoneCompat.isLoaded() == false);
     }
 
-    public static boolean isPaused() {
-        return paused;
-    }
-
-    /** Whether the primary job (if any) is currently suspended, e.g. by {@link #pause()}. */
-    public static boolean isPrimaryJobPaused() {
-        return primaryJobType != JobType.NONE && paused;
-    }
-
-    /**
-     * Cancels whatever Baritone is currently doing — the primary job and/or an in-flight ad-hoc nav
-     * goal — and remembers whichever was active so {@link #resume()} can reissue it. Always sends
-     * "#cancel" regardless of tracked state, since this is the emergency-stop path — tracked state
-     * might be stale, but the cancel command itself is harmless if nothing is running.
-     */
-    public static void pause() {
-        if (primaryJobType != JobType.NONE) {
-            paused = true;
-        }
-
-        if (navGoal != null) {
-            navPaused = true;
-        }
-
-        sendChat("#cancel");
-    }
-
-    /**
-     * Unlike {@link #pause()}, discards the primary job and ad-hoc nav goal entirely rather than
-     * remembering them for {@link #resume()} — used by {@code MinemanCancelController} for a full,
-     * immediate stop.
-     *
-     * @param sendCancelCommand whether to send "#cancel" to Baritone. Pass false when the player just
-     *                          manually typed "#cancel"/"#stop" themselves (that message is already on
-     *                          its way to Baritone), true otherwise.
-     */
-    public static void cancelAll(boolean sendCancelCommand) {
-        primaryJobType = JobType.NONE;
-        primaryMineArgs = null;
-        paused = false;
-
-        navGoal = null;
-        navLastPos = null;
-        navStationaryTicks = 0;
-        navPaused = false;
-
-        if (sendCancelCommand) {
-            sendChat("#cancel");
-        }
-    }
-
-    /**
-     * Re-issues whichever of the primary job or an in-flight ad-hoc nav goal was interrupted by
-     * {@link #pause()}, unless the global safety switch is engaged. If an ad-hoc nav goal was in
-     * flight, only that is resumed — the primary job (if any) stays remembered/paused so it isn't
-     * reissued out from under an in-progress storage-point trip; whoever actually finishes that trip
-     * (e.g. {@code SmartMinemanHandler}'s own resume step) is expected to call this again afterward.
-     */
-    public static void resume() {
-        if (MinemanPauseController.isPaused()) {
-            return;
-        }
-
-        if (navPaused && navGoal != null) {
-            navPaused = false;
-            sendChat("#goal " + navGoal.getX() + " " + navGoal.getY() + " " + navGoal.getZ());
-            sendPath();
-            return;
-        }
-
-        if (paused == false) {
-            return;
-        }
-
-        paused = false;
-
-        switch (primaryJobType) {
-            case MINE -> {
-                if (primaryMineArgs != null) {
-                    sendChat("#mine " + primaryMineArgs);
-                }
-            }
-            case SEL_FILL_AIR -> sendChat("#sel fill air");
-            case GOAL, NONE -> {
-                // A manually-typed "#goal"'s exact target isn't parsed (may use relative "~"
-                // coordinates) — resuming it precisely is a known best-effort gap.
-            }
-        }
-    }
-
-    /**
-     * Called by MixinChatScreen when the player manually types a chat message, so commands issued
-     * outside this mod's own controls (e.g. typing "#mine diamond_ore" directly) are still tracked.
-     * Never called for this mod's own sends, since those call {@link #sendChat} directly.
-     */
-    public static void observeManualChatCommand(String message) {
-        String trimmed = message.trim();
-        String lower = trimmed.toLowerCase();
-
-        if (lower.startsWith("#mine")) {
-            primaryJobType = JobType.MINE;
-            primaryMineArgs = trimmed.length() > 5 ? trimmed.substring(5).trim() : "";
-            paused = false;
-        }
-        else if (lower.startsWith("#sel") && lower.contains("fill") && lower.contains("air")) {
-            primaryJobType = JobType.SEL_FILL_AIR;
-            primaryMineArgs = null;
-            paused = false;
-        }
-        else if (lower.startsWith("#goal")) {
-            primaryJobType = JobType.GOAL;
-            paused = false;
-        }
-        // "#cancel"/"#stop" are handled by MixinChatScreen calling MinemanCancelController directly,
-        // since a manually typed cancel should abort everything (SmartMineman, HungryMineman, etc.),
-        // not just this class's own job-tracking state.
-    }
-
-    // ---- ad-hoc navigation (storage point travel; independent of the primary job) ----
-
-    public static void sendGoal(BlockPos pos) {
-        navGoal = pos;
-        navLastPos = null;
-        navStationaryTicks = 0;
-        sendChat("#goal " + pos.getX() + " " + pos.getY() + " " + pos.getZ());
-    }
-
-    public static void sendPath() {
-        sendChat("#path");
-    }
-
-    public static void sendGoTo(BlockPos pos) {
-        sendGoal(pos);
-        sendPath();
+    static void markNavCalcFailed() {
+        navFailed = true;
     }
 
     public static boolean hasArrivedAtNavGoal() {
-        return navGoal != null && navLastPos != null
-                && navStationaryTicks >= ARRIVAL_STATIONARY_TICKS
-                && navLastPos.distSqr(navGoal) <= ARRIVAL_RADIUS_SQ;
+        return navGoal != null && isAvailable() && BaritoneBridge.isNextTo(navGoal);
     }
 
+    /** Ends the travel; Baritone stops walking and the held or running job takes over again. */
     public static void clearNavGoal() {
         navGoal = null;
-        navLastPos = null;
-        navStationaryTicks = 0;
-        navPaused = false;
+        navClearOnArrival = false;
+        navFailed = false;
+        refreshTripProtection();
     }
 
-    /**
-     * Stops Baritone's ad-hoc nav goal immediately by sending "#cancel" (unlike {@link #clearNavGoal()},
-     * which only wipes local tracking and assumes Baritone already stopped on its own upon arrival).
-     * Use when the travel is no longer needed before Baritone would naturally finish it — e.g. a
-     * quick-deposit attempt succeeded from within reach while still mid-path to the chest.
-     */
+    /** Same as {@link #clearNavGoal()}: with the travel process gone, Baritone stops walking by itself. */
     public static void cancelNavGoal() {
-        if (navGoal != null) {
-            sendChat("#cancel");
-        }
-
         clearNavGoal();
     }
 
-    /** Call once per client tick to update ad-hoc navigation arrival tracking. */
+    /** Call once per client tick. */
     public static void tick() {
-        if (chatFeedbackSuppressTicksRemaining > 0) {
-            chatFeedbackSuppressTicksRemaining--;
-        }
-
-        var player = Minecraft.getInstance().player;
-
-        if (player == null) {
-            navStationaryTicks = 0;
-            navLastPos = null;
-            insideProtectedStoragePoint = false; // nothing to restore once disconnected
+        if (BaritoneCompat.isLoaded() == false) {
             return;
         }
 
-        updateStoragePointProtection(player);
+        updateProtectedBlocks();
 
-        if (navGoal == null) {
-            navStationaryTicks = 0;
-            navLastPos = null;
+        if (Minecraft.getInstance().player == null) {
+            // Disconnected: nothing of the old world's trip or hold carries over, and allowBreak/allowPlace go back
+            jobHeld = false;
+            clearNavGoal();
             return;
         }
 
-        BlockPos pos = player.blockPosition();
+        BaritoneBridge.ensureRegistered();
 
-        if (navLastPos != null && navLastPos.equals(pos)) {
-            navStationaryTicks++;
+        if (navClearOnArrival && hasArrivedAtNavGoal()) {
+            clearNavGoal();
         }
-        else {
-            navStationaryTicks = 0;
+        else if (navClearOnArrival && navFailed) {
+            Minecraft.getInstance().player.sendOverlayMessage(Component.literal("Mineman: no path to the storage point"));
+            clearNavGoal();
         }
 
-        navLastPos = pos;
+        refreshTripProtection();
     }
 
-    // ---- storage point break/place protection ----
+    // ---- storage point protection ----
 
-    // Storage points trigger protection even while disabled, and from a short distance out rather
-    // than only once the player has actually crossed into the selection box — this way Baritone's
-    // break/place is already off by the time it's pathing/mining right at the boundary.
+    // Only during our own store trip (job held or nav goal set), and from a short distance out rather than
+    // only once inside the storage point's box, so break/place is already off when Baritone walks up to it.
+    // Outside a trip allowBreak is left alone: Baritone's mining refuses to run at all with allowBreak off
+    // ("Unable to mine when allowBreak is false"), which used to cancel the job right after a store trip.
     private static final int STORAGE_POINT_PROXIMITY_BLOCKS = 5;
 
     /**
-     * Disables Baritone's {@code allowBreak}/{@code allowPlace} settings while the player is within
-     * {@link #STORAGE_POINT_PROXIMITY_BLOCKS} of any storage point's area (enabled or not), restoring
-     * them once clear, so pathing/mining never breaks into or bridges over a storage point's chests.
-     * Only fires a "#set" pair on an actual enter/exit transition, never every tick. The commands
-     * themselves and Baritone's own confirmation are kept out of chat (see MixinChatComponent); an
-     * action-bar message is shown instead.
+     * Keeps the blocks in {@code protectedStorageBlocks} in Baritone's {@code blocksToDisallowBreaking}
+     * while {@code protectStoragePoints} is on, so it never breaks them anywhere, for mining, building
+     * or pathing. Only touches the list when the setting or the IDs change, and only ever removes the
+     * blocks it added itself.
      */
-    private static void updateStoragePointProtection(LocalPlayer player) {
-        if (Configs.Generic.PROTECT_STORAGE_POINTS.getBooleanValue() == false) {
-            if (insideProtectedStoragePoint) {
-                insideProtectedStoragePoint = false;
-                setBreakPlaceAllowed(true);
-            }
+    private static void updateProtectedBlocks() {
+        List<String> ids = Configs.Generic.PROTECT_STORAGE_POINTS.getBooleanValue()
+                ? Configs.Generic.PROTECTED_STORAGE_BLOCKS.getStrings()
+                : List.of();
+
+        if (ids.equals(appliedProtectedIds)) {
             return;
         }
 
-        boolean inside = isNearAnyStoragePoint(player.blockPosition());
+        Set<Block> blocks = new HashSet<>();
 
-        if (inside != insideProtectedStoragePoint) {
-            insideProtectedStoragePoint = inside;
-            setBreakPlaceAllowed(inside == false);
+        for (String id : ids) {
+            Identifier key = Identifier.tryParse(id.trim());
+
+            if (key != null) {
+                BuiltInRegistries.BLOCK.getOptional(key).ifPresent(blocks::add);
+            }
+        }
+
+        addedDisallowedBlocks = BaritoneBridge.replaceDisallowedBreaking(blocks, addedDisallowedBlocks);
+        appliedProtectedIds = List.copyOf(ids);
+    }
+
+    /**
+     * Turns Baritone's {@code allowBreak}/{@code allowPlace} off while our store trip is within
+     * {@link #STORAGE_POINT_PROXIMITY_BLOCKS} of any storage point's area (enabled or not), and puts back
+     * the values they had before as soon as the trip ends or leaves the area. Only changes them on an
+     * actual start/end, never every tick.
+     */
+    private static void refreshTripProtection() {
+        if (BaritoneCompat.isLoaded() == false) {
+            return;
+        }
+
+        LocalPlayer player = Minecraft.getInstance().player;
+        boolean protect = player != null
+                && Configs.Generic.PROTECT_STORAGE_POINTS.getBooleanValue()
+                && (jobHeld || navGoal != null)
+                && isNearAnyStoragePoint(player.blockPosition());
+
+        if (protect == insideProtectedStoragePoint) {
+            return;
+        }
+
+        insideProtectedStoragePoint = protect;
+
+        if (protect) {
+            savedAllowBreak = BaritoneBridge.isBreakAllowed();
+            savedAllowPlace = BaritoneBridge.isPlaceAllowed();
+            BaritoneBridge.setBreakPlaceAllowed(false, false);
+            player.sendOverlayMessage(Component.literal("allowPlace/Break: disabled"));
+        }
+        else {
+            BaritoneBridge.setBreakPlaceAllowed(savedAllowBreak, savedAllowPlace);
+
+            if (player != null) {
+                player.sendOverlayMessage(Component.literal("allowPlace/Break: restored"));
+            }
         }
     }
 
@@ -343,37 +323,5 @@ public final class BaritoneController {
         }
 
         return false;
-    }
-
-    private static void setBreakPlaceAllowed(boolean allowed) {
-        sendChat("#set allowBreak " + allowed);
-        sendChat("#set allowPlace " + allowed);
-
-        var player = Minecraft.getInstance().player;
-
-        if (player != null) {
-            player.sendOverlayMessage(
-                    Component.literal("allowPlace/Break: " + (allowed ? "enabled" : "disabled")));
-        }
-    }
-
-    private static void sendChat(String command) {
-        var player = Minecraft.getInstance().player;
-
-        if (player == null) {
-            return;
-        }
-
-        if (Configs.Generic.HIDE_BARITONE_CHAT_FEEDBACK.getBooleanValue()) {
-            chatFeedbackSuppressTicksRemaining = CHAT_FEEDBACK_SUPPRESS_TICKS;
-        }
-
-        player.connection.sendChat(command);
-    }
-
-    /** Whether a chat message arriving right now is likely Baritone's echo/confirmation of a command
-     *  this mod just sent, and should be dropped. Read by {@code MixinChatComponent}. */
-    public static boolean isSuppressingChatFeedback() {
-        return chatFeedbackSuppressTicksRemaining > 0;
     }
 }

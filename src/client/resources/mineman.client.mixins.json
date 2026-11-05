@@ -7,7 +7,6 @@
 		"AbstractContainerScreenAccessor",
 		"InventoryAccessor",
 		"MixinAbstractContainerMenu",
-		"MixinChatComponent",
 		"MixinChatScreen",
 		"MixinGui",
 		"MixinGuiRenderer",

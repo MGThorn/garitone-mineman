@@ -108,6 +108,11 @@ public class EasyEatHandler {
         }
     }
 
+    /** Whether there's anything to eat in the inventory, by the same rules (blacklist, Bernd das Brot) as eating itself. */
+    public static boolean hasFood(Minecraft mc) {
+        return mc.player != null && findBestFoodIndex(mc, -1, true) != -1;
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static int[] parseConfiguredSlots() {

@@ -13,20 +13,20 @@ Client-side mining assistant for Minecraft 26.3 (Fabric), built on [Baritone](ht
 
 ## Usage
 
-Press **B** to open the menu. All options and hotkeys can be changed there, or through Mod Menu.
+Open the menu through Mod Menu, or bind a key to `openGuiMainMenu` there (no key by default). All options and hotkeys can be changed in the menu.
 
 ## Requirements
 
 - Minecraft 26.3, Fabric Loader 0.19.5+, Fabric API
 - MaLiLib 0.30.2+
-- Baritone (standalone Fabric build)
+- Optional: Baritone 1.20.0+, the **API** build `baritone-api-fabric-*.jar` from the [Baritone releases](https://github.com/cabaletta/baritone/releases). Needed for mining tasks, Smart Mineman, Hungry Mineman, storage point travel and protection. The standalone build doesn't work with this mod.
 - Optional: Item Scroller 0.33.1+ (inventory sorting), Tweakeroo 0.30.1+ (tool switch-back), Litematica, MiniHUD, Mod Menu
 
 This is a client-only mod. Servers do not need it.
 
 ## Building
 
-Put the Baritone `baritone-standalone-fabric-*.jar` into `libs/`, then run:
+The Baritone API jar is in `libs/`. Run:
 
 ```
 ./gradlew build

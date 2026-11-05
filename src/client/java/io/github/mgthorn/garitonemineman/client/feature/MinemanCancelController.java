@@ -10,21 +10,20 @@ import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneControll
 public final class MinemanCancelController {
     private MinemanCancelController() {}
 
-    /** Cancels everything and tells Baritone to stop via "#cancel". Use for the hotkey/GUI button. */
+    /** Cancels everything, Baritone's own job included. Use for the hotkey/GUI button. */
     public static void cancelAll() {
         cancelAll(true);
     }
 
     /**
-     * @param sendCancelChat whether to send "#cancel" to Baritone. Pass false when the player just
-     *                       manually typed "#cancel"/"#stop" themselves, since that message is about
-     *                       to reach Baritone on its own and sending another would just spam chat.
+     * @param cancelBaritone whether to also cancel Baritone's own job. Pass false when the player just
+     *                       typed "#cancel"/"#stop", which Baritone handles by itself.
      */
-    public static void cancelAll(boolean sendCancelChat) {
+    public static void cancelAll(boolean cancelBaritone) {
         SmartMinemanHandler.cancelAll();
         ChestQuickDepositHandler.cancelAll();
         HungryMinemanHandler.cancelAll();
-        BaritoneController.cancelAll(sendCancelChat);
+        BaritoneController.cancelAll(cancelBaritone);
         MinemanPauseController.setPaused(false);
     }
 }

@@ -6,6 +6,8 @@ import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.AABB;
 import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneController;
 import io.github.mgthorn.garitonemineman.client.config.Configs;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
@@ -14,65 +16,73 @@ import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
 
 /**
- * State machine: IDLE -&gt; MINING -&gt; INVENTORY_FULL_DETECTED -&gt; PAUSING -&gt; TRAVELING_TO_STORAGE
- * -&gt; DEPOSITING -&gt; RESUMING -&gt; MINING. TRAVELING_TO_STORAGE is the coarse hop to the storage
- * point's origin only. DEPOSITING then walks the storage point's chest list in priority order: for
- * each one it first tries a quick deposit ({@link ChestQuickDepositHandler}) from wherever the player
- * already is; if the chest is out of reach, it sends Baritone an actual goal+path towards it and,
- * every {@link #CHEST_TRAVEL_RETRY_INTERVAL_TICKS} ticks while still travelling (or as soon as it
- * arrives, whichever first), tries the quick deposit again from wherever it's gotten to — up to
- * {@link #MAX_CHEST_TRAVEL_ATTEMPTS} distinct travel attempts before giving up on that chest and
- * moving to the next. The moment a quick deposit succeeds, Baritone's path to that chest is cancelled
- * immediately rather than left to finish walking there. After a successful deposit, it moves to the
- * next chest too unless the player's inventory (outside the slots configured in
- * {@link Configs.Generic#QUICK_DEPOSIT_DISABLED_SLOTS}) is now empty, in which case it's done.
+ * Store trips: IDLE -&gt; WATCHING (a mine, build or farm job runs) -&gt; DEPOSITING (inventory full,
+ * job held) -&gt; RESUMING (job released) -&gt; WATCHING.
  *
- * The PAUSING/TRAVELING_TO_STORAGE/DEPOSITING/RESUMING states run regardless of whether the
- * smartMineman setting is enabled, so {@link #triggerManualStoreItems()} (the Store Items hotkey and
- * GUI button) can drive the same deposit loop as a one-off action without the setting being on.
- * Only the automatic MINING -&gt; INVENTORY_FULL_DETECTED trigger is gated on the setting.
+ * The job is never cancelled. {@link BaritoneController#holdJob()} keeps it waiting underneath while
+ * the trip walks with Baritone's travel process, and {@link BaritoneController#releaseJob()} lets it
+ * continue where it stopped, whatever kind of job it is.
+ *
+ * DEPOSITING goes through the storage point's chests in list order, skipping ones that are turned
+ * off or known to have no room. For each chest it tries a quick deposit ({@link ChestQuickDepositHandler})
+ * from where the player stands; if the chest is out of reach or not visible, it walks next to it.
+ * While walking it tries again as soon as the chest comes within reach (standing still for that try).
+ * Only tries made <em>after arriving</em> count towards {@link #MAX_FAILED_ARRIVALS}; a chest is also
+ * given up when Baritone finds no path or the walk takes longer than {@link #MAX_CHEST_TRAVEL_TICKS}.
+ * After a successful deposit it moves on to the next chest only while the selected slots still hold items.
+ * If every chest is done and items are left, the job stays held and the global pause turns on until
+ * the player makes room and presses pause/resume.
+ *
+ * DEPOSITING and RESUMING run whether or not the smartMineman setting is on, so
+ * {@link #triggerManualStoreItems()} (Store Items hotkey and GUI button) can run a one-off trip; only
+ * the automatic start on a full inventory needs the setting.
  */
 public final class SmartMinemanHandler {
-    private enum State { IDLE, MINING, INVENTORY_FULL_DETECTED, PAUSING, TRAVELING_TO_STORAGE, DEPOSITING, RESUMING }
-    private enum DepositSubState { ATTEMPTING, TRAVELING_TO_CHEST }
+    private enum State { IDLE, WATCHING, DEPOSITING, RESUMING }
+    private enum ChestStep { ATTEMPTING, TRAVELING }
 
-    private static final int MAX_CHEST_TRAVEL_ATTEMPTS = 2;
-    private static final int CHEST_TRAVEL_RETRY_INTERVAL_TICKS = 20;
+    private static final int MAX_FAILED_ARRIVALS = 2;
+    private static final int MAX_CHEST_TRAVEL_TICKS = 1200; // ~60s
+    private static final int REACH_CHECK_INTERVAL_TICKS = 10;
 
     private static State state = State.IDLE;
-    private static StoragePoint targetStoragePoint;
-    private static List<StorageBlockEntry> depositQueue;
+    private static boolean manualTripRequested;
+    private static List<StorageBlockEntry> depositQueue = List.of();
     private static int depositIndex;
-    private static DepositSubState depositSubState = DepositSubState.ATTEMPTING;
-    private static int chestTravelAttempts;
-    private static int chestTravelRetryTicks;
-    private static boolean depositAttemptInFlight;
+    private static ChestStep chestStep = ChestStep.ATTEMPTING;
+    private static boolean attemptInFlight;
+    // The current try was made after Baritone reported arriving next to the chest
+    private static boolean attemptAfterArrival;
+    private static int failedArrivals;
+    private static int travelTicks;
+    // Every chest was full with items left over: the job stays held and the global pause is on until the player resumes
+    private static boolean storageFull;
 
     private SmartMinemanHandler() {}
 
-    /** Starts the pause -> travel -> deposit -> resume loop right now, independent of the setting toggle. */
+    /** Starts a store trip right now, independent of the setting toggle. */
     public static void triggerManualStoreItems() {
-        if (state == State.IDLE || state == State.MINING) {
-            state = State.PAUSING;
+        if (state == State.IDLE || state == State.WATCHING) {
+            manualTripRequested = true;
         }
     }
 
-    /** Aborts the store-items loop (if any) immediately and resets to idle. */
+    /** Aborts the store trip (if any) immediately and resets to idle. */
     public static void cancelAll() {
         reset();
     }
 
-    /** True whenever the pause/travel/deposit/resume loop is actively handling a full inventory. */
+    /** True while a store trip runs, from holding the job until releasing it. */
     public static boolean isHandlingFullInventory() {
-        return state != State.IDLE && state != State.MINING;
+        return state == State.DEPOSITING || state == State.RESUMING;
     }
 
-    /** Human-readable progress suffix (e.g. " (chest 2/5)") for the current store-items step, or "". */
+    /** Human-readable progress suffix (e.g. " (chest 2/5, walking)") for the current trip, or "". */
     public static String describeProgress() {
         return switch (state) {
-            case DEPOSITING -> depositQueue == null ? "" : " (chest " + (depositIndex + 1) + "/" + depositQueue.size() + ")";
-            case PAUSING, TRAVELING_TO_STORAGE, INVENTORY_FULL_DETECTED -> " (traveling to storage)";
-            case RESUMING -> " (resuming)";
+            case DEPOSITING -> " (chest " + Math.min(depositIndex + 1, depositQueue.size()) + "/" + depositQueue.size()
+                    + (chestStep == ChestStep.TRAVELING ? ", walking)" : ")");
+            case RESUMING -> storageFull ? " (all chests full: make room, then resume)" : " (resuming)";
             default -> "";
         };
     }
@@ -85,113 +95,71 @@ public final class SmartMinemanHandler {
             return;
         }
 
+        if (MinemanPauseController.isPaused()) {
+            return; // frozen; Baritone itself is held by the global pause process
+        }
+
         boolean settingEnabled = Configs.Generic.SMART_MINEMAN.getBooleanValue();
 
         switch (state) {
             case IDLE -> {
-                if (settingEnabled && BaritoneController.isJobActive()) {
-                    state = State.MINING;
+                if (manualTripRequested) {
+                    startTrip(mc);
+                }
+                else if (settingEnabled && BaritoneController.isBlockBreakingJobActive()) {
+                    state = State.WATCHING;
                 }
             }
-            case MINING -> {
-                // Unlike the IDLE -> MINING trigger below, staying in MINING (and thus keeping track
-                // of whether the job is still active) does NOT depend on the setting — only the
-                // isInventoryFull() auto-trigger itself does — so toggling the setting off mid-job (or
-                // resuming here after a manually-triggered store-items run with the setting off, see
-                // RESUMING below) doesn't strand this in IDLE, unable to ever watch for full inventory
-                // again without the job restarting.
-                if (MinemanPauseController.isPaused()) {
-                    return; // frozen; BaritoneController.pause()/resume() handles the actual job
+            case WATCHING -> {
+                // Staying here doesn't depend on the setting, only the automatic start does, so turning it
+                // off and on again mid-job (or a manual trip with it off) keeps watching the same job.
+                if (manualTripRequested) {
+                    startTrip(mc);
                 }
-
-                if (BaritoneController.isJobActive() == false) {
-                    reset();
-                    return;
+                else if (BaritoneController.isBlockBreakingJobActive() == false) {
+                    state = State.IDLE;
                 }
-
-                if (settingEnabled && isInventoryFull(mc)) {
-                    state = State.INVENTORY_FULL_DETECTED;
+                else if (settingEnabled && isInventoryFull(mc.player)) {
+                    startTrip(mc);
                 }
             }
-            case INVENTORY_FULL_DETECTED -> {
-                if (MinemanPauseController.isPaused()) {
-                    return;
-                }
-
-                state = State.PAUSING;
-            }
-            case PAUSING -> {
-                if (MinemanPauseController.isPaused()) {
-                    return;
-                }
-
-                BaritoneController.pause();
-                targetStoragePoint = StoragePointManager.getInstance()
-                        .getSelectedOrNearestStoragePoint(mc.player.blockPosition());
-
-                if (targetStoragePoint == null) {
-                    mc.player.sendOverlayMessage(
-                            Component.literal("SmartMineman: no storage point available, resuming"));
-                    state = State.RESUMING;
-                    return;
-                }
-
-                BaritoneController.sendGoTo(
-                        new BlockPos(targetStoragePoint.getX(), targetStoragePoint.getY(), targetStoragePoint.getZ()));
-                state = State.TRAVELING_TO_STORAGE;
-            }
-            case TRAVELING_TO_STORAGE -> {
-                if (MinemanPauseController.isPaused()) {
-                    return;
-                }
-
-                // Unlike the per-chest travel in DEPOSITING (which retries on its own timer), this
-                // otherwise just waits forever for hasArrivedAtNavGoal() with no recovery — if the nav
-                // goal ever ends up missing (e.g. another feature like HungryMineman paused/resumed
-                // Baritone around this and only the nav goal, not this hop, got reissued), resend it
-                // instead of getting permanently stuck here.
-                if (BaritoneController.hasActiveNavGoal() == false) {
-                    BaritoneController.sendGoTo(new BlockPos(
-                            targetStoragePoint.getX(), targetStoragePoint.getY(), targetStoragePoint.getZ()));
-                    return;
-                }
-
-                if (BaritoneController.hasArrivedAtNavGoal()) {
-                    BaritoneController.clearNavGoal();
-                    depositQueue = new ArrayList<>(targetStoragePoint.getStorageBlocks());
-                    depositIndex = 0;
-                    depositSubState = DepositSubState.ATTEMPTING;
-                    chestTravelAttempts = 0;
-                    depositAttemptInFlight = false;
-                    state = State.DEPOSITING;
-                }
-            }
-            case DEPOSITING -> {
-                if (MinemanPauseController.isPaused()) {
-                    return;
-                }
-
-                advanceDeposit(mc);
-            }
+            case DEPOSITING -> advanceDeposit(mc);
             case RESUMING -> {
-                if (MinemanPauseController.isPaused()) {
-                    return;
-                }
-
-                BaritoneController.resume();
-                // Go back to watching (MINING) whenever there's still a primary job to watch, not
-                // gated on the setting — the pause/travel/deposit/resume loop runs "regardless of
-                // whether the smartMineman setting is enabled" (see class doc), so a manually-triggered
-                // Store Items run with the setting off must resume mining too, not get stuck in IDLE.
-                state = BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE
-                        ? State.MINING
-                        : State.IDLE;
+                storageFull = false;
+                BaritoneController.releaseJob();
+                state = BaritoneController.getPrimaryJobType().breaksBlocks() ? State.WATCHING : State.IDLE;
             }
         }
     }
 
+    private static void startTrip(Minecraft mc) {
+        manualTripRequested = false;
+        BaritoneController.holdJob();
+        StoragePoint point = StoragePointManager.getInstance().getSelectedOrNearestStoragePoint(mc.player.blockPosition());
+
+        if (point == null) {
+            mc.player.sendOverlayMessage(Component.literal("Smart Mineman: no storage point available, continuing"));
+            state = State.RESUMING;
+            return;
+        }
+
+        depositQueue = new ArrayList<>(point.getStorageBlocks());
+        depositIndex = 0;
+        resetChest();
+        state = State.DEPOSITING;
+    }
+
     private static void advanceDeposit(Minecraft mc) {
         if (depositIndex >= depositQueue.size()) {
+            if (hasItemsInEnabledSlots(mc.player)) {
+                // Continuing would lose every new drop, so wait for the player instead. RESUMING runs once
+                // the global pause is lifted (pause/resume hotkey), which lets the job continue.
+                storageFull = true;
+                MinemanPauseController.setPaused(true);
+                mc.player.sendOverlayMessage(
+                        Component.literal("Smart Mineman: all chests are full. Make room, then press pause/resume"));
+            }
+
             state = State.RESUMING;
             return;
         }
@@ -199,16 +167,16 @@ public final class SmartMinemanHandler {
         StorageBlockEntry entry = depositQueue.get(depositIndex);
         BlockPos pos = new BlockPos(entry.getX(), entry.getY(), entry.getZ());
 
-        if (entry.isUseEnabled() == false || StorageContentIndex.isRecentlyKnownFull(pos)) {
-            advanceToNextChest();
+        if (attemptInFlight == false && chestStep == ChestStep.ATTEMPTING && isWorthTrying(entry, pos, mc.player) == false) {
+            nextChest();
             return;
         }
 
-        switch (depositSubState) {
+        switch (chestStep) {
             case ATTEMPTING -> {
-                if (depositAttemptInFlight == false) {
+                if (attemptInFlight == false) {
                     ChestQuickDepositHandler.beginAttempt(entry);
-                    depositAttemptInFlight = true;
+                    attemptInFlight = true;
                     return;
                 }
 
@@ -217,82 +185,110 @@ public final class SmartMinemanHandler {
                 }
 
                 ChestQuickDepositHandler.Result result = ChestQuickDepositHandler.consumeLastResult();
-                depositAttemptInFlight = false;
+                attemptInFlight = false;
 
                 if (result == null) {
-                    return; // shouldn't happen once isBusy() is false, but just retry defensively
+                    return; // shouldn't happen once isBusy() is false; the next tick tries again
                 }
 
                 switch (result) {
                     case SUCCESS -> {
-                        // Succeeded (possibly from partway down a path Baritone was still walking) —
-                        // stop travelling there immediately rather than let it keep going pointlessly.
-                        BaritoneController.cancelNavGoal();
-
-                        boolean stillHasItems = hasItemsInEnabledSlots(mc);
+                        BaritoneController.clearNavGoal();
+                        boolean stillHasItems = hasItemsInEnabledSlots(mc.player);
                         StorageContentIndex.recordFull(pos, stillHasItems);
 
                         if (stillHasItems) {
-                            advanceToNextChest();
+                            nextChest();
                         }
                         else {
                             state = State.RESUMING;
                         }
                     }
                     case TOO_FAR, BLOCKED -> {
-                        // BLOCKED (line of sight) gets the same retry-by-travelling treatment as
-                        // TOO_FAR, rather than being abandoned outright — the spot Baritone parked at
-                        // may just have a bad angle on the chest; travelling further can clear it.
-                        chestTravelAttempts++;
+                        // Tries while still on the way don't count; only failing after arriving does
+                        if (attemptAfterArrival && ++failedArrivals > MAX_FAILED_ARRIVALS) {
+                            giveUpOnChest(mc, pos, "can't open");
+                            return;
+                        }
 
-                        if (chestTravelAttempts > MAX_CHEST_TRAVEL_ATTEMPTS) {
-                            advanceToNextChest();
-                        }
-                        else {
-                            BaritoneController.sendGoTo(pos);
-                            chestTravelRetryTicks = 0;
-                            depositSubState = DepositSubState.TRAVELING_TO_CHEST;
-                        }
+                        BaritoneController.sendGoTo(pos);
+                        travelTicks = 0;
+                        chestStep = ChestStep.TRAVELING;
                     }
-                    case FAILED -> advanceToNextChest();
+                    case FAILED -> nextChest();
                 }
             }
-            case TRAVELING_TO_CHEST -> {
-                chestTravelRetryTicks++;
+            case TRAVELING -> {
+                travelTicks++;
 
-                // Peek every CHEST_TRAVEL_RETRY_INTERVAL_TICKS while still walking there — quick-deposit
-                // reach is usually satisfied well before Baritone considers itself "arrived" — or as
-                // soon as it does arrive, whichever comes first. The nav goal is deliberately left
-                // running in the background here; it only gets cancelled once ATTEMPTING actually
-                // succeeds (see the SUCCESS case above) or the chest is abandoned (advanceToNextChest).
-                if (BaritoneController.hasArrivedAtNavGoal()
-                        || chestTravelRetryTicks >= CHEST_TRAVEL_RETRY_INTERVAL_TICKS) {
-                    chestTravelRetryTicks = 0;
-                    depositSubState = DepositSubState.ATTEMPTING;
+                if (BaritoneController.hasNavGoalFailed()) {
+                    giveUpOnChest(mc, pos, "no path to");
+                    return;
+                }
+
+                if (travelTicks > MAX_CHEST_TRAVEL_TICKS) {
+                    giveUpOnChest(mc, pos, "took too long to reach");
+                    return;
+                }
+
+                boolean arrived = BaritoneController.hasArrivedAtNavGoal();
+
+                // Quick deposit reach is usually there before Baritone considers itself arrived. Stop walking
+                // for the try, so the player stands still while opening; a failed try walks on.
+                if (arrived || (travelTicks % REACH_CHECK_INTERVAL_TICKS == 0 && isWithinReach(mc.player, entry))) {
+                    BaritoneController.clearNavGoal();
+                    attemptAfterArrival = arrived;
+                    chestStep = ChestStep.ATTEMPTING;
                 }
             }
         }
     }
 
-    private static void advanceToNextChest() {
-        BaritoneController.cancelNavGoal(); // stop pathing towards whatever chest is being abandoned
+    /** Skips chests that are turned off, were full a moment ago, or (by their last seen contents) can't take anything. */
+    private static boolean isWorthTrying(StorageBlockEntry entry, BlockPos pos, Player player) {
+        return entry.isUseEnabled()
+                && StorageContentIndex.isRecentlyKnownFull(pos) == false
+                && ContainerDepositHelper.hasRoomForInventory(entry, player, ChestQuickDepositHandler.parseDisabledSlots());
+    }
+
+    private static boolean isWithinReach(Player player, StorageBlockEntry entry) {
+        double reachSq = player.blockInteractionRange() * player.blockInteractionRange();
+
+        if (new AABB(new BlockPos(entry.getX(), entry.getY(), entry.getZ())).distanceToSqr(player.getEyePosition()) <= reachSq) {
+            return true;
+        }
+
+        return entry.hasSecondPosition()
+                && new AABB(new BlockPos(entry.getSecondX(), entry.getSecondY(), entry.getSecondZ()))
+                        .distanceToSqr(player.getEyePosition()) <= reachSq;
+    }
+
+    private static void giveUpOnChest(Minecraft mc, BlockPos pos, String reason) {
+        mc.player.sendOverlayMessage(Component.literal("Smart Mineman: " + reason + " chest at "
+                + pos.getX() + " " + pos.getY() + " " + pos.getZ() + ", trying the next one"));
+        nextChest();
+    }
+
+    private static void nextChest() {
+        BaritoneController.clearNavGoal(); // stop walking towards the chest being left
         depositIndex++;
-        depositSubState = DepositSubState.ATTEMPTING;
-        chestTravelAttempts = 0;
-        chestTravelRetryTicks = 0;
-        depositAttemptInFlight = false;
+        resetChest();
+    }
+
+    private static void resetChest() {
+        chestStep = ChestStep.ATTEMPTING;
+        attemptInFlight = false;
+        attemptAfterArrival = false;
+        failedArrivals = 0;
+        travelTicks = 0;
     }
 
     /** True if any player-inventory slot outside {@link Configs.Generic#QUICK_DEPOSIT_DISABLED_SLOTS} still holds an item. */
-    private static boolean hasItemsInEnabledSlots(Minecraft mc) {
+    private static boolean hasItemsInEnabledSlots(Player player) {
         Set<Integer> disabledSlots = ChestQuickDepositHandler.parseDisabledSlots();
 
         for (int i = 0; i < 36; i++) {
-            if (disabledSlots.contains(i)) {
-                continue;
-            }
-
-            if (mc.player.getInventory().getItem(i).isEmpty() == false) {
+            if (disabledSlots.contains(i) == false && player.getInventory().getItem(i).isEmpty() == false) {
                 return true;
             }
         }
@@ -300,12 +296,12 @@ public final class SmartMinemanHandler {
         return false;
     }
 
-    private static boolean isInventoryFull(Minecraft mc) {
+    private static boolean isInventoryFull(Player player) {
         int threshold = Configs.Generic.SMART_MINEMAN_FREE_SLOTS_THRESHOLD.getIntegerValue();
         int emptyCount = 0;
 
         for (int i = 0; i < 36; i++) {
-            if (mc.player.getInventory().getItem(i).isEmpty()) {
+            if (player.getInventory().getItem(i).isEmpty()) {
                 emptyCount++;
             }
         }
@@ -315,12 +311,10 @@ public final class SmartMinemanHandler {
 
     private static void reset() {
         state = State.IDLE;
-        targetStoragePoint = null;
-        depositQueue = null;
+        manualTripRequested = false;
+        storageFull = false;
+        depositQueue = List.of();
         depositIndex = 0;
-        depositSubState = DepositSubState.ATTEMPTING;
-        chestTravelAttempts = 0;
-        chestTravelRetryTicks = 0;
-        depositAttemptInFlight = false;
+        resetChest();
     }
 }

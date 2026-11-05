@@ -5,14 +5,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneController;
 import io.github.mgthorn.garitonemineman.client.feature.MinemanCancelController;
 
 /**
- * Observes the raw text of every chat message the player submits, before anything (vanilla or any
- * other mod, including Baritone) processes it — this is the only reliable, ordering-independent way
- * to detect the player manually typing a Baritone command (e.g. "#mine diamond_ore") directly, since
- * this mod's own commands bypass the chat screen entirely (see BaritoneController.sendChat).
+ * Notices the player typing Baritone's {@code #cancel}/{@code #stop}, so our own tasks (Smart Mineman,
+ * Hungry Mineman, quick deposit) stop too. Jobs themselves are read from Baritone's API, not from chat.
  */
 @Mixin(ChatScreen.class)
 public class MixinChatScreen {
@@ -21,12 +18,8 @@ public class MixinChatScreen {
         String lower = message.trim().toLowerCase();
 
         if (lower.startsWith("#cancel") || lower.startsWith("#stop")) {
-            // Player typed the cancel command themselves; it's already headed to Baritone, so don't
-            // send another one — just abort every other autonomous task (SmartMineman, HungryMineman, etc).
+            // Baritone cancels its own job from the command, so only our tasks need stopping
             MinemanCancelController.cancelAll(false);
-        }
-        else {
-            BaritoneController.observeManualChatCommand(message);
         }
     }
 }

@@ -4,13 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneController;
-import io.github.mgthorn.garitonemineman.client.config.Configs;
 
 /**
  * Builds a fresh, read-only snapshot of every currently in-progress automation task each time it's
  * asked — no task list is stored anywhere, so a task simply stops appearing on its own once the
- * handler driving it goes back to idle. Sourced from {@link BaritoneController}'s primary job (shown
- * only while Smart Mineman or Hungry Mineman is enabled), {@link SmartMinemanHandler}'s store-items
+ * handler driving it goes back to idle. Sourced from {@link BaritoneController}'s running job (any kind,
+ * started any way), {@link SmartMinemanHandler}'s store-items
  * loop (nested under the Baritone job when one is being paused for it, or standalone when triggered
  * manually with no qualifying job running), {@link HungryMinemanHandler}'s eat-wait (nested under the
  * Baritone job it's pausing), and {@link ChestQuickDepositHandler}'s manual quick-deposit attempts.
@@ -36,10 +35,7 @@ public final class TaskManager {
         List<TaskInfo> tasks = new ArrayList<>();
         int order = 1;
 
-        boolean smartOrHungryEnabled = Configs.Generic.SMART_MINEMAN.getBooleanValue()
-                || Configs.Generic.HUNGRY_MINEMAN.getBooleanValue();
-        boolean baritoneRootShown = smartOrHungryEnabled
-                && BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE;
+        boolean baritoneRootShown = BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE;
         boolean storingItems = SmartMinemanHandler.isHandlingFullInventory();
         boolean waitingForFood = HungryMinemanHandler.isWaitingForFood();
         boolean pendingEat = HungryMinemanHandler.isPendingEat();
@@ -56,15 +52,18 @@ public final class TaskManager {
                 order = addTask(tasks, order, 1, "Pause: storing items" + SmartMinemanHandler.describeProgress(), globalPaused);
 
                 if (pendingEat) {
-                    order = addTask(tasks, order, 2, "Queued: eat once storing is done", globalPaused);
+                    order = addTask(tasks, order, 2, "Queued: eat after depositing", globalPaused);
                 }
+            }
+            else if (pendingEat) {
+                order = addTask(tasks, order, 1, "Queued: eat when not looking at a container", globalPaused);
             }
         }
         else if (storingItems) {
             order = addTask(tasks, order, 0, "Store items" + SmartMinemanHandler.describeProgress(), globalPaused);
 
             if (pendingEat) {
-                order = addTask(tasks, order, 1, "Queued: eat once storing is done", globalPaused);
+                order = addTask(tasks, order, 1, "Queued: eat after depositing", globalPaused);
             }
         }
 
@@ -81,23 +80,9 @@ public final class TaskManager {
     }
 
     private static String describeBaritoneJob() {
-        BaritoneController.JobType type = BaritoneController.getPrimaryJobType();
-
-        switch (type) {
-            case MINE -> {
-                String args = BaritoneController.getPrimaryMineArgs();
-                return (args == null || args.isEmpty()) ? "Mine" : "Mine (" + args + ")";
-            }
-            case SEL_FILL_AIR -> {
-                return "Fill Air (selection)";
-            }
-            case GOAL -> {
-                return "Goal";
-            }
-            default -> {
-                return "Baritone";
-            }
-        }
+        // Baritone's own name, for example "Mine diamond_ore" or "Building clear area"
+        String name = BaritoneController.getJobName();
+        return name == null ? "Baritone" : name;
     }
 
     private static String describeQuickDeposit() {

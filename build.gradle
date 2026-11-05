@@ -89,10 +89,10 @@ dependencies {
 	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 	localRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
 
-	// Baritone — from the CI artifact of the 26.3 branch: https://github.com/cabaletta/baritone/actions/runs/35786839518
-	// Download the ZIP, extract baritone-standalone-fabric-*.jar, place it in libs/, then sync Gradle.
-	compileOnly fileTree(dir: 'libs', include: 'baritone-standalone-fabric-*.jar')
-	localRuntime fileTree(dir: 'libs', include: 'baritone-standalone-fabric-*.jar')
+	// Baritone, optional: the API build from the v1.20.0 release (https://github.com/cabaletta/baritone/releases/tag/v1.20.0).
+	// The standalone build can't be used, since it obfuscates the baritone.api classes too.
+	compileOnly files('libs/baritone-api-fabric-1.20.0.jar')
+	localRuntime files('libs/baritone-api-fabric-1.20.0.jar')
 	localRuntime "dev.babbaj:nether-pathfinder:1.6"
 }
 
