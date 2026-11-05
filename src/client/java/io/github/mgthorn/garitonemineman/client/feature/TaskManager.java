@@ -7,76 +7,107 @@ import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneControll
 
 /**
  * Builds a fresh, read-only snapshot of every currently in-progress automation task each time it's
- * asked — no task list is stored anywhere, so a task simply stops appearing on its own once the
+ * asked. No task list is stored anywhere, so a task simply stops appearing on its own once the
  * handler driving it goes back to idle. Sourced from {@link BaritoneController}'s running job (any kind,
- * started any way), {@link SmartMinemanHandler}'s store-items
- * loop (nested under the Baritone job when one is being paused for it, or standalone when triggered
- * manually with no qualifying job running), {@link HungryMinemanHandler}'s eat-wait (nested under the
- * Baritone job it's pausing), and {@link ChestQuickDepositHandler}'s manual quick-deposit attempts.
+ * started any way), {@link SmartMinemanHandler}'s store trip (nested under the Baritone job it holds,
+ * or standalone when started by hand with no job running), {@link HungryMinemanHandler}'s eating and
+ * queued eat, and {@link ChestQuickDepositHandler}'s manual quick deposit.
+ *
+ * Every row can be paused/resumed and cancelled ({@link #togglePause()}, {@link #cancel(Kind)}).
+ * Mineman has one global pause, so pausing any row freezes all of them together. Cancelling a row
+ * only stops that task and the ones nested under it.
  */
 public final class TaskManager {
     private TaskManager() {}
 
-    public static final class TaskInfo {
-        public final int order;
-        public final int depth;
-        public final String label;
-        public final boolean paused;
+    public enum Kind { BARITONE_JOB, STORE_TRIP, EATING, QUEUED_EAT, QUICK_DEPOSIT }
 
-        TaskInfo(int order, int depth, String label, boolean paused) {
-            this.order = order;
-            this.depth = depth;
-            this.label = label;
-            this.paused = paused;
+    public enum Status {
+        RUNNING("§aRUNNING§r"),
+        PAUSED("§ePAUSED§r"),
+        WAITING("§6WAITING§r"),
+        QUEUED("§7QUEUED§r");
+
+        public final String text;
+
+        Status(String text) {
+            this.text = text;
         }
     }
 
+    /**
+     * One row. A record, so two snapshots with the same rows are equal and the screen only rebuilds
+     * its rows (and buttons) when something actually changed.
+     *
+     * @param lastChild the last row on its depth under the same parent, for drawing the tree lines
+     */
+    public record TaskInfo(Kind kind, int depth, String label, Status status, boolean lastChild) {}
+
     public static List<TaskInfo> getTasks() {
         List<TaskInfo> tasks = new ArrayList<>();
-        int order = 1;
 
-        boolean baritoneRootShown = BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE;
+        boolean jobShown = BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE;
         boolean storingItems = SmartMinemanHandler.isHandlingFullInventory();
-        boolean waitingForFood = HungryMinemanHandler.isWaitingForFood();
+        boolean eating = HungryMinemanHandler.isWaitingForFood();
         boolean pendingEat = HungryMinemanHandler.isPendingEat();
-        boolean globalPaused = MinemanPauseController.isPaused();
+        boolean userPaused = MinemanPauseController.isUserPaused();
+        Status running = userPaused ? Status.PAUSED : Status.RUNNING;
 
-        if (baritoneRootShown) {
-            order = addTask(tasks, order, 0, describeBaritoneJob(), BaritoneController.isPrimaryJobPaused());
+        if (jobShown) {
+            Status jobStatus = userPaused ? Status.PAUSED
+                    : BaritoneController.isPrimaryJobPaused() ? Status.WAITING : Status.RUNNING;
+            tasks.add(new TaskInfo(Kind.BARITONE_JOB, 0, describeBaritoneJob(), jobStatus, true));
 
-            if (waitingForFood) {
-                order = addTask(tasks, order, 1, "Pause: waiting for food", globalPaused);
+            if (eating) {
+                tasks.add(new TaskInfo(Kind.EATING, 1, "Eating", running, storingItems == false && pendingEat == false));
             }
 
             if (storingItems) {
-                order = addTask(tasks, order, 1, "Pause: storing items" + SmartMinemanHandler.describeProgress(), globalPaused);
+                tasks.add(new TaskInfo(Kind.STORE_TRIP, 1, "Storing items" + SmartMinemanHandler.describeProgress(),
+                        eating ? Status.WAITING : running, true));
 
                 if (pendingEat) {
-                    order = addTask(tasks, order, 2, "Queued: eat after depositing", globalPaused);
+                    tasks.add(new TaskInfo(Kind.QUEUED_EAT, 2, "Queued: eat after depositing", userPaused ? Status.PAUSED : Status.QUEUED, true));
                 }
             }
             else if (pendingEat) {
-                order = addTask(tasks, order, 1, "Queued: eat when not looking at a container", globalPaused);
+                tasks.add(new TaskInfo(Kind.QUEUED_EAT, 1, "Queued: eat when not looking at a container",
+                        userPaused ? Status.PAUSED : Status.QUEUED, true));
             }
         }
         else if (storingItems) {
-            order = addTask(tasks, order, 0, "Store items" + SmartMinemanHandler.describeProgress(), globalPaused);
+            tasks.add(new TaskInfo(Kind.STORE_TRIP, 0, "Store items" + SmartMinemanHandler.describeProgress(),
+                    eating ? Status.WAITING : running, true));
+
+            if (eating) {
+                tasks.add(new TaskInfo(Kind.EATING, 1, "Eating", running, pendingEat == false));
+            }
 
             if (pendingEat) {
-                order = addTask(tasks, order, 1, "Queued: eat after depositing", globalPaused);
+                tasks.add(new TaskInfo(Kind.QUEUED_EAT, 1, "Queued: eat after depositing", userPaused ? Status.PAUSED : Status.QUEUED, true));
             }
         }
 
         if (ChestQuickDepositHandler.isBusy() && storingItems == false) {
-            addTask(tasks, order, 0, describeQuickDeposit(), globalPaused);
+            tasks.add(new TaskInfo(Kind.QUICK_DEPOSIT, 0, describeQuickDeposit(), running, true));
         }
 
         return tasks;
     }
 
-    private static int addTask(List<TaskInfo> tasks, int order, int depth, String label, boolean paused) {
-        tasks.add(new TaskInfo(order, depth, label, paused));
-        return order + 1;
+    /** Pause/Resume on any row: the global pause, same as the pause/resume hotkey. */
+    public static void togglePause() {
+        MinemanPauseController.toggle();
+    }
+
+    /** Cancel on a row: stops that task (and what's nested under it) only. */
+    public static void cancel(Kind kind) {
+        switch (kind) {
+            case BARITONE_JOB -> MinemanCancelController.cancelAll();
+            case STORE_TRIP -> SmartMinemanHandler.cancelTripForCurrentJob();
+            case EATING, QUEUED_EAT -> HungryMinemanHandler.skipUntilJobEnds();
+            case QUICK_DEPOSIT -> ChestQuickDepositHandler.cancelAll();
+        }
     }
 
     private static String describeBaritoneJob() {
@@ -87,6 +118,6 @@ public final class TaskManager {
 
     private static String describeQuickDeposit() {
         BlockPos pos = ChestQuickDepositHandler.getTargetPos();
-        return pos == null ? "Quick Deposit" : "Quick Deposit (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+        return pos == null ? "Quick deposit" : "Quick deposit (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
     }
 }

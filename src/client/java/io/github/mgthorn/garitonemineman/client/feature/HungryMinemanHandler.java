@@ -53,6 +53,8 @@ public final class HungryMinemanHandler {
     private static int retryCooldownTicks = 0;
     // "No food" was already shown for this hungry spell; cleared once fed or food turns up
     private static boolean noFoodWarned = false;
+    // The player cancelled eating in the Task Manager: don't eat again until the job ends or they eat themselves
+    private static boolean skipForJob = false;
 
     private HungryMinemanHandler() {}
 
@@ -104,6 +106,11 @@ public final class HungryMinemanHandler {
         if (baritoneActive == false || missing < Configs.Generic.AUTO_EAT_THRESHOLD.getIntegerValue()) {
             clearQueue();
             noFoodWarned = false;
+            skipForJob = false; // the job ended, or the player ate by themselves
+            return;
+        }
+
+        if (skipForJob) {
             return;
         }
 
@@ -165,6 +172,14 @@ public final class HungryMinemanHandler {
         stopWaiting();
         clearQueue();
         retryCooldownTicks = 0;
+        skipForJob = false;
+    }
+
+    /** Task Manager "Cancel" on eating or a queued eat: stops it and doesn't eat again until the job ends. */
+    public static void skipUntilJobEnds() {
+        stopWaiting();
+        clearQueue();
+        skipForJob = true;
     }
 
     public static boolean isWaitingForFood() {

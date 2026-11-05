@@ -57,6 +57,8 @@ public final class SmartMinemanHandler {
     private static int travelTicks;
     // Every chest was full with items left over: the job stays held and the global pause is on until the player resumes
     private static boolean storageFull;
+    // The player cancelled the store trip in the Task Manager: no automatic trip until the job ends
+    private static boolean skipAutoTripsForJob;
 
     private SmartMinemanHandler() {}
 
@@ -69,6 +71,28 @@ public final class SmartMinemanHandler {
 
     /** Aborts the store trip (if any) immediately and resets to idle. */
     public static void cancelAll() {
+        reset();
+        skipAutoTripsForJob = false;
+    }
+
+    /**
+     * Task Manager "Cancel" on the store trip: stops the trip and lets the job continue. The inventory
+     * is still full, so no automatic trip starts again until this job ends; the Store Items hotkey
+     * still works.
+     */
+    public static void cancelTripForCurrentJob() {
+        if (isHandlingFullInventory() == false) {
+            return;
+        }
+
+        if (storageFull) {
+            MinemanPauseController.setPaused(false); // that pause was only waiting for room in the chests
+        }
+
+        ChestQuickDepositHandler.cancelAll();
+        BaritoneController.clearNavGoal();
+        BaritoneController.releaseJob();
+        skipAutoTripsForJob = BaritoneController.getPrimaryJobType() != BaritoneController.JobType.NONE;
         reset();
     }
 
@@ -99,7 +123,11 @@ public final class SmartMinemanHandler {
             return; // frozen; Baritone itself is held by the global pause process
         }
 
-        boolean settingEnabled = Configs.Generic.SMART_MINEMAN.getBooleanValue();
+        if (skipAutoTripsForJob && BaritoneController.getPrimaryJobType() == BaritoneController.JobType.NONE) {
+            skipAutoTripsForJob = false; // the job whose trip was cancelled has ended
+        }
+
+        boolean settingEnabled = Configs.Generic.SMART_MINEMAN.getBooleanValue() && skipAutoTripsForJob == false;
 
         switch (state) {
             case IDLE -> {
