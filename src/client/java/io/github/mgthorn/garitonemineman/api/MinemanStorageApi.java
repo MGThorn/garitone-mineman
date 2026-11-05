@@ -2,6 +2,7 @@ package io.github.mgthorn.garitonemineman.api;
 
 import java.util.Map;
 import org.jetbrains.annotations.Nullable;
+import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
 import io.github.mgthorn.garitonemineman.client.storage.StorageInventory;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
@@ -19,8 +20,8 @@ import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
  * boxes count too. Poll {@link #getRevision()} to know when to read again.
  */
 public final class MinemanStorageApi {
-    /** Version of this API; goes up when methods are added. */
-    public static final int API_VERSION = 1;
+    /** Version of this API; goes up when methods are added. 2: {@link #isActiveStorageBlock}. */
+    public static final int API_VERSION = 2;
 
     private MinemanStorageApi() {}
 
@@ -71,6 +72,34 @@ public final class MinemanStorageApi {
     public static int getKnownStorageBlockCount() {
         StoragePoint point = StoragePointManager.getInstance().getActiveStoragePoint();
         return point != null ? StorageInventory.getSummary(point).knownChests() : 0;
+    }
+
+    /**
+     * Whether the block at this absolute position is one of the active storage point's storage blocks
+     * (either half of a double chest counts). False if there's no active storage point, it's in another
+     * dimension, or the block isn't one of its storage blocks. Cheap; meant for once per opened screen.
+     *
+     * @param dimension for example "minecraft:overworld"
+     * @since API_VERSION 2
+     */
+    public static boolean isActiveStorageBlock(String dimension, int x, int y, int z) {
+        StoragePoint point = StoragePointManager.getInstance().getActiveStoragePoint();
+
+        if (point == null || point.getDimensionId().equals(dimension) == false) {
+            return false;
+        }
+
+        for (StorageBlockEntry entry : point.getStorageBlocks()) {
+            if (entry.getX() == x && entry.getY() == y && entry.getZ() == z) {
+                return true;
+            }
+
+            if (entry.hasSecondPosition() && entry.getSecondX() == x && entry.getSecondY() == y && entry.getSecondZ() == z) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Goes up whenever storage points or their contents change (and on world switch). */
