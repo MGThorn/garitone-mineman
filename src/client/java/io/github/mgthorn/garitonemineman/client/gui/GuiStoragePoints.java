@@ -69,7 +69,7 @@ public class GuiStoragePoints extends GuiListBase<StoragePoint, WidgetStoragePoi
         int y = GuiUtils.getScaledWindowHeight() - 26;
         int x = 6;
 
-        ButtonGeneric addBtn = new ButtonGeneric(x, y, 130, 20, "Add Storage Point");
+        ButtonGeneric addBtn = new ButtonGeneric(x, y, 110, 20, "Add Storage Point");
         this.addButton(addBtn, (btn, mb) -> {
             BlockPos corner1 = SelectionToolHandler.getPos1();
             BlockPos corner2 = SelectionToolHandler.getPos2();
@@ -87,7 +87,7 @@ public class GuiStoragePoints extends GuiListBase<StoragePoint, WidgetStoragePoi
                 SelectionToolHandler.clearSelection();
 
                 if (created != null) {
-                    GuiStoragePointConfiguration gui = new GuiStoragePointConfiguration(created);
+                    GuiStoragePointContents gui = new GuiStoragePointContents(created);
                     gui.setParent(this);
                     GuiBase.openGui(gui);
                     return;
@@ -96,25 +96,34 @@ public class GuiStoragePoints extends GuiListBase<StoragePoint, WidgetStoragePoi
 
             if (this.getListWidget() != null) this.getListWidget().refreshEntries();
         });
-        x += 130 + 6;
+        x += 110 + 6;
 
-        ButtonGeneric setPos1Btn = new ButtonGeneric(x, y, 90, 20, "Set Pos1");
+        ButtonGeneric setPos1Btn = new ButtonGeneric(x, y, 56, 20, "Set Pos1");
         this.addButton(setPos1Btn, (btn, mb) -> {
             if (this.mc.player != null) {
                 SelectionToolHandler.setPos1FromLookRay(this.mc.player);
             }
         });
-        x += 90 + 4;
+        x += 56 + 2;
 
-        ButtonGeneric setPos2Btn = new ButtonGeneric(x, y, 90, 20, "Set Pos2");
+        ButtonGeneric setPos2Btn = new ButtonGeneric(x, y, 56, 20, "Set Pos2");
         this.addButton(setPos2Btn, (btn, mb) -> {
             if (this.mc.player != null) {
                 SelectionToolHandler.setPos2FromLookRay(this.mc.player);
             }
         });
-        x += 90 + 4;
+        x += 56 + 2;
 
-        ButtonGeneric clearSelectionBtn = new ButtonGeneric(x, y, 110, 20, "Clear Selection");
+        ButtonGeneric clearSelectionBtn = new ButtonGeneric(x, y, 90, 20, "Clear Selection");
         this.addButton(clearSelectionBtn, (btn, mb) -> SelectionToolHandler.clearSelection());
+        x += 90 + 6;
+
+        ButtonGeneric blockTypesBtn = new ButtonGeneric(x, y, 74, 20, "Block types",
+                "Pick the blocks that count as storage blocks", "when a storage point scans its area.");
+        this.addButton(blockTypesBtn, (btn, mb) -> GuiBase.openGui(new GuiStorageBlockTypesEditor(this)));
+
+        int backWidth = 50;
+        ButtonGeneric backBtn = new ButtonGeneric(GuiUtils.getScaledWindowWidth() - 10 - backWidth, y, backWidth, 20, "Back");
+        this.addButton(backBtn, (btn, mb) -> GuiBase.openGui(this.getParent()));
     }
 }

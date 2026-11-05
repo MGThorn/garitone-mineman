@@ -1,114 +1,122 @@
 package io.github.mgthorn.garitonemineman.client.gui;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.Message.MessageType;
-import fi.dy.masa.malilib.gui.button.ButtonBase;
 import fi.dy.masa.malilib.gui.button.ButtonGeneric;
-import fi.dy.masa.malilib.gui.button.IButtonActionListener;
 import fi.dy.masa.malilib.gui.widgets.WidgetListEntryBase;
 import fi.dy.masa.malilib.render.GuiContext;
 import fi.dy.masa.malilib.render.RenderUtils;
+import io.github.mgthorn.garitonemineman.client.storage.StorageInventory;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
 
+/**
+ * One storage point, two lines: active marker, name, dimension, distance, storage blocks
+ * (usable/total) and fill bar on top; Set active / Configure / Remove below on the right.
+ */
 public class WidgetStoragePointEntry extends WidgetListEntryBase<StoragePoint> {
-    private final WidgetListStoragePoints parentList;
+    private static final int BAR_WIDTH = 60;
+
     private final boolean isOdd;
-    private final int buttonsStartX;
+    private final boolean active;
 
     public WidgetStoragePointEntry(int x, int y, int width, int height,
             int listIndex, boolean isOdd, StoragePoint entry, WidgetListStoragePoints parentList) {
         super(x, y, width, height, entry, listIndex);
-        this.parentList = parentList;
         this.isOdd = isOdd;
+        this.active = StoragePointManager.getInstance().isActive(entry);
 
-        // Layout buttons from right to left
-        int by = y + 2;
-        int bx = x + width;
+        int by = y + height - 19;
+        int bx = x + width - 2;
 
-        bx -= 54;
-        this.addButton(new ButtonGeneric(bx, by, 52, 18, "Remove"),
-                new ActionListener(ActionType.REMOVE, entry, parentList));
+        bx -= 52;
+        this.addButton(new ButtonGeneric(bx, by, 52, 16, "Remove"), (btn, mb) -> {
+            if (entry.isLocked() && GuiBase.isShiftDown() == false) {
+                parentList.getParentGui().addMessage(MessageType.ERROR,
+                        "The storage point is locked!\n- Hold Shift to force remove it");
+                return;
+            }
 
-        String enabledText = "Rendering: " + (entry.isEnabled() ? "§aON§r" : "§cOFF§r");
-        int enabledWidth = this.getStringWidth(enabledText) + 10;
-        bx -= enabledWidth + 2;
-        this.addButton(new ButtonGeneric(bx, by, enabledWidth, 18, enabledText),
-                new ActionListener(ActionType.TOGGLE, entry, parentList));
+            StoragePointManager.getInstance().removeStoragePoint(entry);
+            parentList.refreshEntries();
+        });
 
-        bx -= 70; // 68px button + 2px gap
-        this.addButton(new ButtonGeneric(bx, by, 68, 18, "Configure"),
-                new ActionListener(ActionType.CONFIGURE, entry, parentList));
+        bx -= 66;
+        this.addButton(new ButtonGeneric(bx, by, 64, 16, "Configure"), (btn, mb) -> {
+            GuiStoragePointContents gui = new GuiStoragePointContents(entry);
+            gui.setParent(parentList.getParentGui());
+            GuiBase.openGui(gui);
+        });
 
-        this.buttonsStartX = bx;
+        bx -= 70;
+        ButtonGeneric activeButton = new ButtonGeneric(bx, by, 68, 16, this.active ? "§aActive§r" : "Set active",
+                this.active ? "Click to have no active storage point" : "Smart Mineman stores here, other mods count this one");
+        this.addButton(activeButton, (btn, mb) -> {
+            StoragePointManager.getInstance().setActiveStoragePoint(this.active ? null : entry);
+            parentList.refreshEntries();
+        });
     }
 
     @Override
     public boolean canSelectAt(MouseButtonEvent click) {
-        // Only allow selection when the click lands on empty entry space, not on a button
-        return this.hoveredSubWidget == null;
+        return false; // the buttons do everything
     }
 
     @Override
     public void render(GuiContext ctx, int mouseX, int mouseY, boolean selected) {
-        // Alternating row background
-        RenderUtils.drawRect(ctx, this.x, this.y, this.width, this.height,
-                this.isOdd ? 0x20FFFFFF : 0x30FFFFFF);
-        // "SP" icon: red square with white letters
-        RenderUtils.drawRect(ctx, this.x + 2, this.y + 3, 16, 16, 0xFFCC0000);
-        this.drawCenteredStringWithShadow(ctx, this.x + 10, this.y + 7, 0xFFFFFFFF, "SP");
-        // Name — drawn directly (not as a label widget) so it doesn't block row selection via canSelectAt
-        this.drawStringWithShadow(ctx, this.x + 20, this.y + 7, 0xFFFFFFFF, this.entry.getName());
-        // Lock icon: shown left of the Configure button while the storage point is locked
-        if (this.entry.isLocked()) {
-            int lockX = this.buttonsStartX - 15;
-            int lockY = this.y + 6;
-            RenderUtils.drawRect(ctx, lockX + 2, lockY, 1, 3, 0xFFDDDDDD);
-            RenderUtils.drawRect(ctx, lockX + 7, lockY, 1, 3, 0xFFDDDDDD);
-            RenderUtils.drawRect(ctx, lockX + 2, lockY, 6, 1, 0xFFDDDDDD);
-            RenderUtils.drawRect(ctx, lockX, lockY + 3, 10, 7, 0xFFE6B800);
-            RenderUtils.drawRect(ctx, lockX + 4, lockY + 5, 2, 3, 0xFF554400);
+        StoragePoint point = this.entry;
+        RenderUtils.drawRect(ctx, this.x, this.y, this.width, this.height, this.isOdd ? 0x20FFFFFF : 0x30FFFFFF);
+
+        if (this.active) {
+            RenderUtils.drawRect(ctx, this.x, this.y, 2, this.height, 0xFF55FF55);
         }
-        // Buttons
+
+        int ty = this.y + 5;
+        int tx = this.x + 6;
+        String name = (this.active ? "§a★ §r" : "") + point.getName() + (point.isLocked() ? " §6(locked)§r" : "");
+        this.drawStringWithShadow(ctx, tx, ty, 0xFFFFFFFF, name);
+
+        StorageInventory.Summary summary = StorageInventory.getSummary(point);
+        String info = "§7" + dimensionName(point.getDimensionId()) + "   " + distanceText(point)
+                + "   " + summary.usableChests() + "/" + summary.chests() + " storage blocks§r";
+        this.drawStringWithShadow(ctx, tx, ty + 12, 0xFFFFFFFF, info);
+
+        // Fill bar, top right
+        int barX = this.x + this.width - BAR_WIDTH - 40;
+        RenderUtils.drawRect(ctx, barX, ty, BAR_WIDTH, 8, 0xFF303030);
+
+        if (summary.knownChests() > 0) {
+            float fill = summary.fillLevel();
+            int color = fill >= 0.9f ? 0xFFE04040 : fill >= 0.7f ? 0xFFE0C040 : 0xFF40C040;
+            RenderUtils.drawRect(ctx, barX, ty, Math.round(BAR_WIDTH * fill), 8, color);
+            this.drawStringWithShadow(ctx, barX + BAR_WIDTH + 4, ty, 0xFFFFFFFF, Math.round(fill * 100) + "%");
+        }
+        else {
+            this.drawStringWithShadow(ctx, barX + BAR_WIDTH + 4, ty, 0xFF808080, "?");
+        }
+
         super.render(ctx, mouseX, mouseY, selected);
-        // White selection outline drawn last so it appears on top
-        if (this.parentList.isSelected(this.entry)) {
-            RenderUtils.drawRect(ctx, this.x,                      this.y,                       this.width, 1,           0xFFFFFFFF);
-            RenderUtils.drawRect(ctx, this.x,                      this.y + this.height - 1,     this.width, 1,           0xFFFFFFFF);
-            RenderUtils.drawRect(ctx, this.x,                      this.y,                       1,          this.height, 0xFFFFFFFF);
-            RenderUtils.drawRect(ctx, this.x + this.width - 1,     this.y,                       1,          this.height, 0xFFFFFFFF);
-        }
     }
 
-    private enum ActionType { CONFIGURE, TOGGLE, REMOVE }
+    private static String distanceText(StoragePoint point) {
+        Minecraft mc = Minecraft.getInstance();
 
-    private record ActionListener(ActionType type, StoragePoint entry,
-            WidgetListStoragePoints parentList) implements IButtonActionListener {
-        @Override
-        public void actionPerformedWithButton(ButtonBase button, int mouseButton) {
-            switch (this.type) {
-                case TOGGLE -> {
-                    this.entry.toggleEnabled();
-                    StoragePointManager.getInstance().save();
-                    this.parentList.refreshEntries();
-                }
-                case REMOVE -> {
-                    if (this.entry.isLocked() && GuiBase.isShiftDown() == false) {
-                        this.parentList.getParentGui().addMessage(MessageType.ERROR,
-                                "The storage point is locked!\n- Hold Shift to force remove it");
-                    }
-                    else {
-                        StoragePointManager.getInstance().removeStoragePoint(this.entry);
-                        this.parentList.refreshEntries();
-                    }
-                }
-                case CONFIGURE -> {
-                    GuiStoragePointConfiguration gui = new GuiStoragePointConfiguration(this.entry);
-                    gui.setParent(this.parentList.getParentGui());
-                    GuiBase.openGui(gui);
-                }
-            }
+        if (mc.player == null || StoragePointManager.getInstance().isInCurrentDimension(point) == false) {
+            return "-";
         }
+
+        var pos = mc.player.blockPosition();
+        return Math.round(Math.sqrt(point.distanceSqToArea(pos.getX(), pos.getY(), pos.getZ()))) + "m";
+    }
+
+    static String dimensionName(String dimensionId) {
+        return switch (dimensionId) {
+            case "minecraft:overworld" -> "Overworld";
+            case "minecraft:the_nether" -> "Nether";
+            case "minecraft:the_end" -> "End";
+            default -> dimensionId;
+        };
     }
 }
