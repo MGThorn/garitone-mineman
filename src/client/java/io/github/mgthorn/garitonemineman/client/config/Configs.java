@@ -76,6 +76,7 @@ public class Configs {
                 "minecraft:waxed_weathered_copper_chest",
                 "minecraft:waxed_oxidized_copper_chest"
         )).apply(GENERIC_KEY);
+        public static final ConfigOptionList STORAGE_CONTENTS_SOURCE       = new ConfigOptionList("storageContentsSource", ContentsSource.AUTO).apply(GENERIC_KEY);
         // Blocks a storage point picks up as storage blocks when scanning its area (edited in its picker screen)
         public static final ConfigStringList STORAGE_BLOCK_TYPES           = new ConfigStringList("storageBlockTypes", ImmutableList.of(
                 "minecraft:chest",
@@ -177,14 +178,15 @@ public class Configs {
                 return super.getComment() + "\n" + GuiBase.TXT_RED + StringUtils.translate("mineman.config.warning.tweakeroo_missing") + GuiBase.TXT_RST;
             }
         }.apply(GENERIC_KEY);
+        public static final ConfigInteger    TOOL_SWITCH_BACK_DELAY         = new ConfigInteger("toolSwitchBackDelay", 5, 0, 200, true).apply(GENERIC_KEY);
         public static final ConfigInteger    WEAPON_SWITCH_BACK_DELAY       = new ConfigInteger("weaponSwitchBackDelay", 20, 0, 200, true).apply(GENERIC_KEY);
         public static final ConfigInteger    STRUCTURE_SEARCH_RADIUS        = new ConfigInteger("structureSearchRadius", 5000, 256, 30000, false).apply(GENERIC_KEY);
 
         // The config screen tabs. The ESP block and entity lists are edited in the Block ESP / Entity ESP screens instead.
-        public static final List<IConfigBase> OPTIONS = ImmutableList.of(MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, MUTE_ALL_SOUNDS, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, WEAPON_SWITCH_BACK_DELAY, STRUCTURE_SEARCH_RADIUS);
+        public static final List<IConfigBase> OPTIONS = ImmutableList.of(MOVE_MATCHING_IGNORE_METADATA, BERND_DAS_BROT, SELECTION_TOOL_ITEM, MAX_REGION_SIZE, MUTE_ALL_SOUNDS, DISABLE_PUMPKIN_OVERLAY, TOOL_SWITCH_BACK, TOOL_SWITCH_BACK_DELAY, WEAPON_SWITCH_BACK_DELAY, STRUCTURE_SEARCH_RADIUS);
         // Sorted by topic: Smart Mineman, Hungry Mineman, protection, auto eat. The slot lists and the auto eat
         // blacklist are edited in their own screens (buttons above the list), see HIDDEN.
-        public static final List<IConfigBase> GARITONE = ImmutableList.of(SMART_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, HUNGRY_MINEMAN, PROTECT_STORAGE_POINTS, PROTECTED_STORAGE_BLOCKS, AUTO_EAT, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD);
+        public static final List<IConfigBase> GARITONE = ImmutableList.of(SMART_MINEMAN, SMART_MINEMAN_FREE_SLOTS_THRESHOLD, HUNGRY_MINEMAN, PROTECT_STORAGE_POINTS, PROTECTED_STORAGE_BLOCKS, STORAGE_CONTENTS_SOURCE, AUTO_EAT, AUTO_EAT_PICK_ORDER, AUTO_EAT_THRESHOLD);
         // Saved, but not shown in any tab: edited in their own picker screens
         public static final List<IConfigBase> HIDDEN = ImmutableList.of(QUICK_DEPOSIT_DISABLED_SLOTS, AUTO_EAT_PICKABLE_SLOTS, AUTOEAT_BLACKLIST, STORAGE_BLOCK_TYPES);
         public static final List<IConfigBase> ESP = ImmutableList.of(ITEM_ESP, BLOCK_ESP, BLOCK_ESP_RADIUS, ENTITY_ESP);

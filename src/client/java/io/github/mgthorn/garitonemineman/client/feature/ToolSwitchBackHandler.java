@@ -29,6 +29,9 @@ import io.github.mgthorn.garitonemineman.client.mixin.InventoryAccessor;
  *
  * Changing the main-hand item resets the attack cooldown, so a session that included a weapon switch
  * waits weaponSwitchBackDelay ticks after release; clicking again in that window keeps the weapon out.
+ * Tool-only sessions wait toolSwitchBackDelay ticks, and nothing is restored while a block is still being
+ * broken: swapping back right away on a laggy server could cross the server's own inventory updates and
+ * leave the hotbar out of sync (placed blocks flash and vanish until the slot is resynced).
  */
 public class ToolSwitchBackHandler {
     private enum Context { NONE, TOOL_SWITCH, DURABILITY, RESTORING }
@@ -156,13 +159,17 @@ public class ToolSwitchBackHandler {
             return;
         }
 
-        if (mc.options.keyAttack.isDown()) {
+        // Clicking again during the delay keeps the tool/weapon out; a block still being broken also waits,
+        // so the swap clicks don't cross the server's break, durability and pickup updates (inventory desync).
+        if (mc.options.keyAttack.isDown() || mc.gameMode.isDestroying()) {
             releasedTicks = 0;
             return;
         }
 
         // Swapping the weapon out resets the attack cooldown, so give the player a moment to click again.
-        int delay = weaponInSession ? Configs.Generic.WEAPON_SWITCH_BACK_DELAY.getIntegerValue() : 0;
+        int delay = weaponInSession
+                ? Configs.Generic.WEAPON_SWITCH_BACK_DELAY.getIntegerValue()
+                : Configs.Generic.TOOL_SWITCH_BACK_DELAY.getIntegerValue();
 
         if (releasedTicks++ < delay) {
             return;

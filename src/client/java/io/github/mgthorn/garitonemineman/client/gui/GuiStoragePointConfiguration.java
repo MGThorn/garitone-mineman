@@ -17,6 +17,7 @@ import fi.dy.masa.malilib.render.GuiContext;
 import io.github.mgthorn.garitonemineman.client.compat.baritone.BaritoneController;
 import io.github.mgthorn.garitonemineman.client.feature.SmartMinemanHandler;
 import io.github.mgthorn.garitonemineman.client.storage.StorageBlockEntry;
+import io.github.mgthorn.garitonemineman.client.storage.StorageContentReader;
 import io.github.mgthorn.garitonemineman.client.storage.StorageInventory;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
@@ -40,6 +41,9 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
     private ButtonGeneric nudgeButtonY;
     private ButtonGeneric nudgeButtonZ;
     private ButtonGeneric moveToPlayerButton;
+    private int statusX;
+    private int statusY;
+    private int shownRevision = -1;
 
     public GuiStoragePointConfiguration(StoragePoint storagePoint) {
         super(10, LIST_Y);
@@ -163,16 +167,11 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
         this.setPositionControlsEnabled(!this.storagePoint.isLocked());
         y += 24;
 
-        ButtonGeneric rescan = new ButtonGeneric(x, y, half, 20, "Rescan",
-                "Look for new and removed storage blocks in the area now.",
-                "Also happens by itself every few seconds while you're within 32 blocks.");
+        ButtonGeneric rescan = createRescanButton(x, y, half);
         this.addButton(rescan, (btn, mb) -> {
-            if (StoragePointRescanner.rescan(this.storagePoint)) {
+            if (rescanWithMessage(this, this.storagePoint)) {
                 this.getListWidget().refreshEntries();
                 this.initGui();
-            }
-            else {
-                this.addMessage(MessageType.WARNING, "Can't rescan: the area is in another dimension or not loaded");
             }
         });
         ButtonGeneric store = new ButtonGeneric(x + half + 2, y, half, 20, "Store Items",
@@ -193,6 +192,8 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
         ButtonGeneric goal = new ButtonGeneric(x + half + 2, y, half, 20, "Set Goal");
         goal.setEnabled(this.isHere());
         this.addButton(goal, (btn, mb) -> BaritoneController.sendGoal(this.originPos()));
+        this.statusX = x;
+        this.statusY = y + 26;
 
         String backLabel = "Back";
         int backWidth = this.getStringWidth(backLabel) + 20;
@@ -202,13 +203,91 @@ public class GuiStoragePointConfiguration extends GuiListBase<StorageBlockEntry,
 
     @Override
     public void drawContents(GuiContext ctx, int mouseX, int mouseY, float partialTicks) {
+        // The automatic rescan (or a late Servux / op query answer) changed something
+        int revision = StoragePointManager.getInstance().getRevision();
+
+        if (revision != this.shownRevision) {
+            this.shownRevision = revision;
+            this.getListWidget().refreshEntries();
+        }
+
         super.drawContents(ctx, mouseX, mouseY, partialTicks);
+
+        // Side panel, below the actions: where contents come from and when the last rescan ran
+        int y = this.statusY;
+        this.drawStringWithShadow(ctx, "Contents:", this.statusX, y, 0xFFAAAAAA);
+        y += 11;
+        StorageContentReader.Source source = StorageContentReader.getSource();
+        this.drawStringWithShadow(ctx, source.getLabel(), this.statusX, y, source == StorageContentReader.Source.NONE ? 0xFFFFAA55 : 0xFF55FF55);
+        y += 11;
+
+        if (source == StorageContentReader.Source.NONE) {
+            for (String reason : StorageContentReader.getNoSourceReason().split(", ")) {
+                this.drawStringWithShadow(ctx, "§7- " + reason, this.statusX, y, 0xFFAAAAAA);
+                y += 11;
+            }
+        }
+
+        this.drawStringWithShadow(ctx, lastRescanText(this.storagePoint), this.statusX, y, 0xFFAAAAAA);
 
         StorageInventory.Summary summary = StorageInventory.getSummary(this.storagePoint);
         String info = summary.chests() + " storage blocks (" + summary.usableChests() + " used), "
                 + (summary.knownChests() > 0 ? Math.round(summary.fillLevel() * 100) + "% full" : "contents unknown")
                 + (summary.knownChests() < summary.chests() ? ", " + (summary.chests() - summary.knownChests()) + " never opened" : "");
         this.drawStringWithShadow(ctx, info, 12, 48, 0xFFAAAAAA);
+    }
+
+    static ButtonGeneric createRescanButton(int x, int y, int width) {
+        return new ButtonGeneric(x, y, width, 20, "Rescan",
+                "Look for new and removed storage blocks in the area now,",
+                "and read the contents if this world allows it (see storageContentsSource).",
+                "Also happens by itself every few seconds while you're within 32 blocks.");
+    }
+
+    /**
+     * Rescans the point and tells the player what happened.
+     * @return whether the rescan ran (the point is in this dimension and loaded)
+     */
+    static boolean rescanWithMessage(GuiBase gui, StoragePoint point) {
+        StoragePointRescanner.Result result = StoragePointRescanner.rescan(point);
+
+        if (result == null) {
+            gui.addMessage(MessageType.WARNING, "Can't rescan: the area is in another dimension or not loaded");
+            return false;
+        }
+
+        String blocks = result.added() == 0 && result.removed() == 0
+                ? "No new or removed storage blocks"
+                : result.added() + " new, " + result.removed() + " removed storage blocks";
+        StorageContentReader.Source source = StorageContentReader.getSource();
+        String contents;
+
+        if (source == StorageContentReader.Source.NONE) {
+            contents = "contents only update when a chest is opened (" + StorageContentReader.getNoSourceReason() + ")";
+        }
+        else if (result.contentsRead() >= result.storageBlocks()) {
+            contents = "contents read for all " + result.storageBlocks();
+        }
+        else if (source.isAsync()) {
+            contents = "contents read for " + result.contentsRead() + " of " + result.storageBlocks() + ", the rest arrive in a moment";
+        }
+        else {
+            contents = "contents read for " + result.contentsRead() + " of " + result.storageBlocks();
+        }
+
+        gui.addMessage(source == StorageContentReader.Source.NONE ? MessageType.WARNING : MessageType.SUCCESS, blocks + "; " + contents);
+        return true;
+    }
+
+    static String lastRescanText(StoragePoint point) {
+        long last = StoragePointRescanner.getLastRescan(point);
+
+        if (last == 0) {
+            return "Last rescan: not yet";
+        }
+
+        long seconds = (System.currentTimeMillis() - last) / 1000;
+        return "Last rescan: " + (seconds < 60 ? seconds + " s ago" : (seconds / 60) + " min ago");
     }
 
     private BlockPos originPos() {

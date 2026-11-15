@@ -13,6 +13,7 @@ import fi.dy.masa.malilib.gui.GuiTextFieldGeneric;
 import fi.dy.masa.malilib.gui.button.ButtonGeneric;
 import fi.dy.masa.malilib.render.GuiContext;
 import fi.dy.masa.malilib.render.RenderUtils;
+import io.github.mgthorn.garitonemineman.client.storage.StorageContentReader;
 import io.github.mgthorn.garitonemineman.client.storage.StorageInventory;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePoint;
 import io.github.mgthorn.garitonemineman.client.storage.StoragePointManager;
@@ -71,6 +72,12 @@ public class GuiStoragePointContents extends GuiBase {
 
         ButtonGeneric back = new ButtonGeneric(this.width - 50, this.height - 22, 40, 20, "Back");
         this.addButton(back, (btn, mb) -> GuiBase.openGui(this.getParent()));
+        ButtonGeneric rescan = GuiStoragePointConfiguration.createRescanButton(this.width - 112, this.height - 22, 60);
+        this.addButton(rescan, (btn, mb) -> {
+            if (GuiStoragePointConfiguration.rescanWithMessage(this, this.storagePoint)) {
+                this.builtRevision = -1;
+            }
+        });
     }
 
     private void rebuildIfNeeded() {
@@ -113,8 +120,14 @@ public class GuiStoragePointContents extends GuiBase {
         StorageInventory.Summary summary = StorageInventory.getSummary(this.storagePoint);
         String info = this.rows.size() + " different items   " + summary.knownChests() + "/" + summary.chests()
                 + " storage blocks known" + (summary.knownChests() > 0 ? "   " + Math.round(summary.fillLevel() * 100) + "% full" : "")
-                + (summary.knownChests() < summary.chests() ? "   §7(open the others once to count them)§r" : "");
+                + (summary.knownChests() < summary.chests() && StorageContentReader.getSource() == StorageContentReader.Source.NONE
+                        ? "   §7(open the others once to count them)§r" : "");
         this.drawStringWithShadow(ctx, info, 12, 50, 0xFFAAAAAA);
+
+        // Bottom line, left of the Rescan button: where contents come from and when the last rescan ran
+        String status = StorageContentReader.describe() + "   " + GuiStoragePointConfiguration.lastRescanText(this.storagePoint);
+        boolean noSource = StorageContentReader.getSource() == StorageContentReader.Source.NONE;
+        this.drawStringWithShadow(ctx, status, this.width - 118 - this.getStringWidth(status), this.height - 16, noSource ? 0xFFFFAA55 : 0xFF808080);
 
         int x = 10;
         int w = this.width - 20;
