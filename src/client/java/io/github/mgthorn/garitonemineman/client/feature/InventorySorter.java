@@ -1,242 +1,437 @@
 package io.github.mgthorn.garitonemineman.client.feature;
 
-import java.util.Collections;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.core.component.DataComponents;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.tags.TagKey;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.Tool;
-import io.github.mgthorn.garitonemineman.client.mixin.ItemScrollerInventoryUtilsInvoker;
+import io.github.mgthorn.garitonemineman.client.compat.ItemScrollerCompat;
+import io.github.mgthorn.garitonemineman.client.mixin.AbstractContainerScreenAccessor;
 import io.github.mgthorn.garitonemineman.client.storage.InventorySortConfig;
+import io.github.mgthorn.garitonemineman.client.storage.SortRule;
 
 /**
- * Fills in the player's "this item belongs in this slot" configured slots ({@link InventorySortConfig})
- * before Item Scroller's own generic sortInventory runs (see {@code MixinItemScrollerSort}) — moving
- * each configured slot's target item into place first, so Item Scroller's own priority-list sort only
- * has to deal with whatever's left over.
+ * Mineman's own inventory sort (its own hotkey; Item Scroller's sort is left alone).
  *
- * Item id only; item components/NBT are deliberately ignored (no {@code isSameItemSameComponents}
- * anywhere here) — a configured slot matches by registry item id alone. The one exception is tools:
- * if the configured item belongs to one of vanilla's own tool tags ({@code #minecraft:pickaxes},
- * {@code axes}, {@code shovels}, {@code hoes}, {@code swords}), the configured item only marks the
- * *category* — any item sharing that tag matches the slot — and among the matches actually present in
- * the inventory, the one with the highest {@link Tool#defaultMiningSpeed()} wins, not necessarily the
- * exact configured item/tier (a stone pickaxe configured for a slot gets bumped by an iron one if
- * you're carrying both).
+ * <ol>
+ *   <li>Partial stacks of the same item in the main inventory are merged.</li>
+ *   <li>Every fixed slot of the active profile ({@link InventorySortConfig}) gets the item its
+ *       {@link SortRule} prefers. Specific rules (enchantments, exact item) pick before general ones.
+ *       A fixed slot without a match stays empty when the rule is "reserved", otherwise it's free.</li>
+ *   <li>Everything else in the main inventory, plus whatever was pushed out of a fixed slot, is sorted
+ *       into the free main inventory slots in a stable order (registry order, then name, then count),
+ *       so sorting twice gives the same result. Hotbar slots without a rule and the offhand keep their
+ *       item.</li>
+ * </ol>
+ *
+ * The whole result is planned on copies first, then sent as clicks: mostly single SWAP clicks (number
+ * key swaps, button 40 = offhand), paced by {@link ItemScrollerCompat#getClicksPerTick()}.
  */
 public final class InventorySorter {
-    private static final int SLOT_COUNT = 36;
+    private static final int HOTBAR = 9;
+    private static final int MAIN_END = 36;
 
-    private static final List<TagKey<Item>> TOOL_CATEGORY_TAGS = List.of(
-            ItemTags.PICKAXES, ItemTags.AXES, ItemTags.SHOVELS, ItemTags.HOES, ItemTags.SWORDS);
+    private record Click(int containerId, int menuSlot, int button, ContainerInput type) {}
+
+    private static final ArrayDeque<Click> QUEUE = new ArrayDeque<>();
+    @Nullable private static String doneMessage;
 
     private InventorySorter() {}
 
-    public static void applyConfiguredSlots(AbstractContainerMenu menu, Player player) {
-        String[] filter = InventorySortConfig.getSlotItemFilter();
+    public static boolean isBusy() {
+        return QUEUE.isEmpty() == false;
+    }
 
-        if (filter == null) {
+    // ---- Entry point ----
+
+    /** Sort hotkey: sorts the inventory of the open screen with the active profile. */
+    public static void sortFromHotkey() {
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+
+        if (player == null || mc.gameMode == null || !(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) {
             return;
         }
 
-        Inventory inventory = player.getInventory();
-        Map<Integer, Integer> menuSlotByInvIndex = mapMenuSlots(menu, inventory);
-        Set<Integer> claimed = new HashSet<>();
-
-        for (int targetIndex = 0; targetIndex < filter.length && targetIndex < SLOT_COUNT; targetIndex++) {
-            String configuredId = filter[targetIndex];
-
-            if (configuredId == null) {
-                continue;
-            }
-
-            Item configuredItem = resolveItem(configuredId);
-
-            if (configuredItem == null) {
-                continue;
-            }
-
-            Integer targetMenuSlot = menuSlotByInvIndex.get(targetIndex);
-
-            if (targetMenuSlot == null) {
-                continue; // this inventory slot isn't part of the currently open menu
-            }
-
-            TagKey<Item> category = toolCategoryOf(configuredItem);
-            ItemStack current = inventory.getItem(targetIndex);
-
-            if (current.isEmpty() == false && matches(configuredItem, category, current)) {
-                claimed.add(targetIndex);
-                continue; // already correct, nothing to move
-            }
-
-            int sourceIndex = findBestSource(inventory, configuredItem, category, claimed, targetIndex);
-
-            if (sourceIndex < 0) {
-                continue; // nothing in the inventory belongs here right now
-            }
-
-            Integer sourceMenuSlot = menuSlotByInvIndex.get(sourceIndex);
-
-            if (sourceMenuSlot == null) {
-                continue;
-            }
-
-            swapSlots(menu, player, sourceMenuSlot, targetMenuSlot);
-            claimed.add(targetIndex);
-        }
-    }
-
-    /**
-     * Sorts the player's hotbar and main inventory together as a single combined range, using Item
-     * Scroller's own sorting algorithm (via {@link ItemScrollerInventoryUtilsInvoker}), then re-applies
-     * {@link #applyConfiguredSlots} once more — this "re-locks" every configured slot back into place
-     * in case the wider sort just moved one of them, which is otherwise exactly what would happen: Item
-     * Scroller's own {@code sortInventory} only ever sorts whichever single region (hotbar OR main) the
-     * mouse happens to be hovering, and has no notion of a slot being "already correctly placed" to
-     * leave alone.
-     */
-    public static void sortRemainderCombined(AbstractContainerScreen<?> gui, Player player) {
-        AbstractContainerMenu menu = gui.getMenu();
-        Map<Integer, Integer> menuSlotByInvIndex = mapMenuSlots(menu, player.getInventory());
-
-        if (menuSlotByInvIndex.isEmpty()) {
+        if (isBusy()) {
             return;
         }
 
-        int start = Collections.min(menuSlotByInvIndex.values());
-        int end = Collections.max(menuSlotByInvIndex.values()) + 1;
+        if (player.isCreative()) {
+            message(player, "§cMineman sort doesn't work in creative mode");
+            return;
+        }
 
-        ItemScrollerInventoryUtilsInvoker.mineman$quickSort(gui, start, end, false, 8);
-        applyConfiguredSlots(menu, player);
+        AbstractContainerMenu menu = player.containerMenu;
+
+        if (menu.getCarried().isEmpty() == false) {
+            message(player, "§cPut down the item on the cursor first");
+            return;
+        }
+
+        Slot hovered = ((AbstractContainerScreenAccessor) screen).getHoveredSlot();
+
+        if (hovered != null && hovered.container != player.getInventory()) {
+            // Over a chest's own slots: storage point chests with rules are sorted by StorageChestSorter (later)
+            message(player, "§7Hover your inventory to sort it (chests: Item Scroller's sort)");
+            return;
+        }
+
+        int clicks = sortInventory(menu, player);
+        InventorySortConfig.Profile profile = InventorySortConfig.getActiveProfile();
+        doneMessage = clicks == 0 ? "§7Already sorted (" + profile.getName() + ")" : "§aSorted (" + profile.getName() + ")";
+
+        if (clicks == 0) {
+            message(player, doneMessage);
+            doneMessage = null;
+        }
     }
 
-    /**
-     * Maps inventory-index (0-35) -&gt; menu-slot-index for every menu slot backed by the player's own
-     * inventory. {@link Inventory} is a single unified {@code Container} covering hotbar+main *and*
-     * armor/offhand/body-armor (via its equipment-slot mapping, at container indices &gt;= 36) — armor
-     * and offhand slots share the exact same backing {@code Inventory} instance, just at those higher
-     * indices, so they must be explicitly excluded here or they'd otherwise get swept into
-     * {@link #sortRemainderCombined}'s range and get sorted/touched right along with the real 36.
-     */
-    private static Map<Integer, Integer> mapMenuSlots(AbstractContainerMenu menu, Inventory inventory) {
+    /** Plans and queues the sort of the player's inventory in {@code menu}. Returns the number of clicks. */
+    public static int sortInventory(AbstractContainerMenu menu, LocalPlayer player) {
+        Map<Integer, Integer> menuSlots = mapMenuSlots(menu, player.getInventory());
+
+        if (menuSlots.size() < MAIN_END) {
+            return 0; // a menu without the whole player inventory
+        }
+
+        Plan plan = new Plan(menu.containerId, menuSlots, player.getInventory());
+        plan.mergeMainStacks();
+        plan.arrange(InventorySortConfig.getActiveProfile());
+        QUEUE.addAll(plan.clicks);
+        return plan.clicks.size();
+    }
+
+    // ---- Paced sending ----
+
+    public static void onClientTick() {
+        if (QUEUE.isEmpty()) {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+
+        if (player == null || mc.gameMode == null || player.containerMenu.containerId != QUEUE.peek().containerId()) {
+            // Screen closed or changed: stop, the rest no longer fits
+            QUEUE.clear();
+            doneMessage = null;
+            return;
+        }
+
+        for (int i = ItemScrollerCompat.getClicksPerTick(); i > 0 && QUEUE.isEmpty() == false; i--) {
+            Click click = QUEUE.poll();
+            mc.gameMode.handleContainerInput(click.containerId(), click.menuSlot(), click.button(), click.type(), player);
+        }
+
+        if (QUEUE.isEmpty() && doneMessage != null) {
+            message(player, doneMessage);
+            doneMessage = null;
+        }
+    }
+
+    public static void cancel() {
+        QUEUE.clear();
+        doneMessage = null;
+    }
+
+    private static void message(LocalPlayer player, String text) {
+        player.sendOverlayMessage(Component.literal(text));
+    }
+
+    // ---- Planning ----
+
+    /** Inventory index (0-35) → menu slot, for every menu slot backed by the player's own inventory. */
+    static Map<Integer, Integer> mapMenuSlots(AbstractContainerMenu menu, Inventory inventory) {
         Map<Integer, Integer> map = new HashMap<>();
 
         for (Slot slot : menu.slots) {
-            if (slot.container == inventory) {
-                int containerSlot = slot.getContainerSlot();
-
-                if (containerSlot >= 0 && containerSlot < SLOT_COUNT) {
-                    map.put(containerSlot, slot.index);
-                }
+            if (slot.container == inventory && slot.getContainerSlot() >= 0 && slot.getContainerSlot() < MAIN_END) {
+                map.put(slot.getContainerSlot(), slot.index);
             }
         }
 
         return map;
     }
 
-    /** Best (highest mining-speed, for tool categories) unclaimed inventory slot matching the configured item, or -1. */
-    private static int findBestSource(Inventory inventory, Item configuredItem, @Nullable TagKey<Item> category,
-            Set<Integer> claimed, int excludeIndex) {
-        int best = -1;
-
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            if (i == excludeIndex || claimed.contains(i)) {
-                continue;
-            }
-
-            ItemStack stack = inventory.getItem(i);
-
-            if (stack.isEmpty() || matches(configuredItem, category, stack) == false) {
-                continue;
-            }
-
-            if (best == -1) {
-                best = i;
-                continue;
-            }
-
-            if (category != null && compareTools(stack, inventory.getItem(best)) > 0) {
-                best = i;
-            }
-        }
-
-        return best;
-    }
-
-    private static boolean matches(Item configuredItem, @Nullable TagKey<Item> category, ItemStack actual) {
-        if (category != null) {
-            return actual.is(category);
-        }
-
-        return actual.is(configuredItem);
-    }
-
-    @Nullable
-    private static TagKey<Item> toolCategoryOf(Item configuredItem) {
-        ItemStack probe = new ItemStack(configuredItem);
-
-        for (TagKey<Item> tag : TOOL_CATEGORY_TAGS) {
-            if (probe.is(tag)) {
-                return tag;
-            }
-        }
-
-        return null;
-    }
-
-    /** Higher default mining speed wins; a stack with no Tool component at all loses to one that has it. */
-    private static int compareTools(ItemStack a, ItemStack b) {
-        Tool toolA = a.get(DataComponents.TOOL);
-        Tool toolB = b.get(DataComponents.TOOL);
-        float speedA = toolA != null ? toolA.defaultMiningSpeed() : Float.NEGATIVE_INFINITY;
-        float speedB = toolB != null ? toolB.defaultMiningSpeed() : Float.NEGATIVE_INFINITY;
-        return Float.compare(speedA, speedB);
-    }
+    /** Stable order for items without a fixed slot. */
+    static final Comparator<ItemStack> REST_ORDER = Comparator
+            .comparingInt((ItemStack s) -> BuiltInRegistries.ITEM.getId(s.getItem()))
+            .thenComparing(s -> s.getHoverName().getString())
+            .thenComparing(s -> s.getComponentsPatch().toString())
+            .thenComparing(Comparator.comparingInt(ItemStack::getCount).reversed());
 
     /**
-     * Pick up the source, place into the target (swapping if the target held something else), and put
-     * whatever ends up back on the cursor back where the source came from. Real pickup clicks, the same
-     * pickup/place chain used elsewhere in this mod (see {@code MixinMultiPlayerGameMode}'s
-     * redistribute), so it survives a round trip to a real dedicated server rather than relying on any
-     * local-only slot mutation.
+     * Works on copies of the inventory and records the clicks that turn the real inventory into the result.
+     * Positions are inventory indices: 0-8 hotbar, 9-35 main, 40 offhand.
      */
-    private static void swapSlots(AbstractContainerMenu menu, Player player, int sourceMenuSlot, int targetMenuSlot) {
-        Minecraft mc = Minecraft.getInstance();
-        int containerId = menu.containerId;
+    private static final class Plan {
+        private final int containerId;
+        private final Map<Integer, Integer> menuSlots;
+        private final Map<Integer, ItemStack> sim = new LinkedHashMap<>();
+        final List<Click> clicks = new ArrayList<>();
 
-        mc.gameMode.handleContainerInput(containerId, sourceMenuSlot, 0, ContainerInput.PICKUP, player);
-        mc.gameMode.handleContainerInput(containerId, targetMenuSlot, 0, ContainerInput.PICKUP, player);
+        Plan(int containerId, Map<Integer, Integer> menuSlots, Inventory inventory) {
+            this.containerId = containerId;
+            this.menuSlots = menuSlots;
 
-        if (menu.getCarried().isEmpty() == false) {
-            mc.gameMode.handleContainerInput(containerId, sourceMenuSlot, 0, ContainerInput.PICKUP, player);
-        }
-    }
+            for (int i = 0; i < MAIN_END; i++) {
+                this.sim.put(i, inventory.getItem(i).copy());
+            }
 
-    @Nullable
-    private static Item resolveItem(String itemId) {
-        Identifier id = Identifier.tryParse(itemId);
-
-        if (id == null) {
-            return null;
+            this.sim.put(InventorySortConfig.OFFHAND, inventory.getItem(InventorySortConfig.OFFHAND).copy());
         }
 
-        return BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        /** Fills partial stacks in the main inventory from later partial stacks of the same item. */
+        void mergeMainStacks() {
+            for (int i = HOTBAR; i < MAIN_END; i++) {
+                ItemStack target = this.sim.get(i);
+
+                for (int j = i + 1; j < MAIN_END && target.isEmpty() == false && target.getCount() < target.getMaxStackSize(); j++) {
+                    ItemStack source = this.sim.get(j);
+
+                    if (source.isEmpty() || ItemStack.isSameItemSameComponents(target, source) == false) {
+                        continue;
+                    }
+
+                    int moved = Math.min(source.getCount(), target.getMaxStackSize() - target.getCount());
+                    this.pickup(j);
+                    this.pickup(i);
+
+                    if (moved < source.getCount()) {
+                        this.pickup(j); // the rest goes back
+                    }
+
+                    target.grow(moved);
+                    source.shrink(moved);
+
+                    if (source.isEmpty()) {
+                        this.sim.put(j, ItemStack.EMPTY);
+                    }
+                }
+            }
+        }
+
+        void arrange(InventorySortConfig.Profile profile) {
+            List<Integer> positions = new ArrayList<>(this.sim.keySet());
+            Map<Integer, Integer> source = new HashMap<>(); // target position → position whose stack goes there
+            Set<Integer> used = new HashSet<>();
+            Set<Integer> reservedEmpty = new HashSet<>();
+            List<Integer> freeMain = new ArrayList<>();
+            List<Integer> freeHotbar = new ArrayList<>();
+
+            // 1. Fixed slots, specific rules first
+            List<Map.Entry<Integer, SortRule>> rules = new ArrayList<>(profile.getRules().entrySet());
+            rules.removeIf(e -> this.sim.containsKey(e.getKey()) == false);
+            rules.sort(Comparator.comparingInt((Map.Entry<Integer, SortRule> e) -> -specificity(e.getValue())).thenComparingInt(Map.Entry::getKey));
+
+            for (Map.Entry<Integer, SortRule> e : rules) {
+                int slot = e.getKey();
+                SortRule rule = e.getValue();
+                Comparator<ItemStack> preference = rule.preference();
+                int best = -1;
+
+                for (int p : positions) {
+                    ItemStack stack = this.sim.get(p);
+
+                    if (used.contains(p) || rule.matches(stack) == false) {
+                        continue;
+                    }
+
+                    // Prefer the item already in the slot when it's as good as the best
+                    if (best == -1 || preference.compare(stack, this.sim.get(best)) < 0
+                            || (p == slot && preference.compare(stack, this.sim.get(best)) == 0)) {
+                        best = p;
+                    }
+                }
+
+                if (best >= 0) {
+                    source.put(slot, best);
+                    used.add(best);
+                }
+                else if (rule.isReserved()) {
+                    reservedEmpty.add(slot);
+                }
+                else if (slot < HOTBAR) {
+                    freeHotbar.add(slot);
+                }
+                else if (slot < MAIN_END) {
+                    freeMain.add(slot);
+                }
+            }
+
+            // 2. Hotbar slots without a rule and the offhand keep their item
+            for (int p : positions) {
+                boolean hasRule = profile.getRule(p) != null;
+
+                if (hasRule || used.contains(p)) {
+                    continue;
+                }
+
+                if (p < HOTBAR || p == InventorySortConfig.OFFHAND) {
+                    if (this.sim.get(p).isEmpty()) {
+                        if (p < HOTBAR) {
+                            freeHotbar.add(p);
+                        }
+                    }
+                    else {
+                        source.put(p, p);
+                        used.add(p);
+                    }
+                }
+                else {
+                    freeMain.add(p);
+                }
+            }
+
+            // 3. The rest, in a stable order, into the free main slots, then free hotbar slots, then reserved ones
+            List<Integer> rest = new ArrayList<>();
+
+            for (int p : positions) {
+                if (used.contains(p) == false && this.sim.get(p).isEmpty() == false) {
+                    rest.add(p);
+                }
+            }
+
+            rest.sort((a, b) -> REST_ORDER.compare(this.sim.get(a), this.sim.get(b)));
+            freeMain.sort(null);
+            freeHotbar.sort(null);
+            List<Integer> free = new ArrayList<>(freeMain);
+            free.addAll(freeHotbar);
+            free.addAll(reservedEmpty.stream().sorted().toList()); // only when the inventory is too full otherwise
+
+            for (int i = 0; i < rest.size() && i < free.size(); i++) {
+                source.put(free.get(i), rest.get(i));
+                used.add(rest.get(i));
+            }
+
+            // 4. The remaining targets get the empty slots (fixBijection pairs them up)
+            this.applyPermutation(positions, fixBijection(positions, source));
+        }
+
+        /** Makes sure every position is the source of exactly one target. */
+        private static Map<Integer, Integer> fixBijection(List<Integer> positions, Map<Integer, Integer> source) {
+            Map<Integer, Integer> result = new HashMap<>();
+            Set<Integer> taken = new HashSet<>();
+
+            for (int p : positions) {
+                Integer s = source.get(p);
+
+                if (s != null && taken.add(s)) {
+                    result.put(p, s);
+                }
+            }
+
+            ArrayDeque<Integer> unusedSources = new ArrayDeque<>();
+
+            for (int p : positions) {
+                if (taken.contains(p) == false) {
+                    unusedSources.add(p);
+                }
+            }
+
+            for (int p : positions) {
+                if (result.containsKey(p) == false) {
+                    result.put(p, unusedSources.poll());
+                }
+            }
+
+            return result;
+        }
+
+        /** Moves every stack to its target with swaps; identical stacks aren't swapped. */
+        private void applyPermutation(List<Integer> positions, Map<Integer, Integer> source) {
+            // Track where each original stack (by identity) currently is
+            Map<ItemStack, Integer> where = new IdentityHashMap<>();
+            Map<Integer, ItemStack> original = new HashMap<>();
+
+            for (int p : positions) {
+                ItemStack stack = this.sim.get(p);
+
+                if (stack.isEmpty()) {
+                    stack = new ItemStack(net.minecraft.world.item.Items.AIR); // a distinct marker per empty slot
+                    this.sim.put(p, stack);
+                }
+
+                where.put(stack, p);
+                original.put(p, stack);
+            }
+
+            for (int target : positions) {
+                ItemStack wanted = original.get(source.get(target));
+                int current = where.get(wanted);
+
+                if (current == target) {
+                    continue;
+                }
+
+                ItemStack displaced = this.sim.get(target);
+
+                if (sameContents(displaced, wanted) == false) {
+                    this.swap(target, current);
+                }
+
+                this.sim.put(target, wanted);
+                this.sim.put(current, displaced);
+                where.put(wanted, target);
+                where.put(displaced, current);
+            }
+        }
+
+        private static boolean sameContents(ItemStack a, ItemStack b) {
+            return (a.isEmpty() && b.isEmpty()) || ItemStack.matches(a, b);
+        }
+
+        /** Clicks that exchange the stacks of two positions. */
+        private void swap(int a, int b) {
+            if (isButton(b) && a != InventorySortConfig.OFFHAND) {
+                this.swapClick(a, b);
+            }
+            else if (isButton(a) && b != InventorySortConfig.OFFHAND) {
+                this.swapClick(b, a);
+            }
+            else {
+                // Two main inventory slots: through hotbar slot 0 and back
+                int temp = 0;
+                this.swapClick(a, temp);
+                this.swapClick(b, temp);
+                this.swapClick(a, temp);
+            }
+        }
+
+        private static boolean isButton(int position) {
+            return position < HOTBAR || position == InventorySortConfig.OFFHAND;
+        }
+
+        private void swapClick(int position, int buttonPosition) {
+            this.clicks.add(new Click(this.containerId, this.menuSlots.get(position), buttonPosition, ContainerInput.SWAP));
+        }
+
+        private void pickup(int position) {
+            this.clicks.add(new Click(this.containerId, this.menuSlots.get(position), 0, ContainerInput.PICKUP));
+        }
+
+        private static int specificity(SortRule rule) {
+            int score = 0;
+            score += rule.getRequired().size() * 4 + rule.getForbidden().size() * 2;
+            score += rule.isAnyOfType() && rule.getToolType() != null ? 0 : 1;
+            return score;
+        }
     }
 }

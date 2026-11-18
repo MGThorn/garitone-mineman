@@ -39,6 +39,7 @@ public class GaritoneMinemanClient implements ClientModInitializer {
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> ToolSwitchBackHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> SelectionToolHandler.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> StoragePointRescanner.onClientTick());
+		ClientTickEvents.START_CLIENT_TICK.register(mc -> io.github.mgthorn.garitonemineman.client.feature.InventorySorter.onClientTick());
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> StructureWaypointManager.getInstance().onClientTick());
 		RenderEventHandler.getInstance().registerWorldLastRenderer(new MinemanWorldRenderer());
 		PauseIndicatorRenderHandler.register();

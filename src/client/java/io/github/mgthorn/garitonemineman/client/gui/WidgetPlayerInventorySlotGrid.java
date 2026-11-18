@@ -99,7 +99,8 @@ public class WidgetPlayerInventorySlotGrid extends WidgetBase {
             InventoryOverlay.renderStackAt(ctx, real, sx, sy, 1f);
         }
 
-        String configuredItemId = InventorySortConfig.getSlotItem(invIndex);
+        io.github.mgthorn.garitonemineman.client.storage.SortRule configuredRule = InventorySortConfig.getRule(invIndex);
+        String configuredItemId = configuredRule != null ? configuredRule.getItemId() : null;
 
         // Only show the configured "target item" ghost when the slot isn't already showing a real
         // item — otherwise the two icons would just sit on top of each other. Hiding real items
@@ -126,7 +127,7 @@ public class WidgetPlayerInventorySlotGrid extends WidgetBase {
             return false;
         }
 
-        InventorySortConfig.setSlotItem(index, null);
+        InventorySortConfig.setRule(index, null);
         this.onChange.run();
         return true;
     }
@@ -145,7 +146,7 @@ public class WidgetPlayerInventorySlotGrid extends WidgetBase {
             return;
         }
 
-        InventorySortConfig.setSlotItem(index, BuiltInRegistries.ITEM.getKey(dragged.getItem()).toString());
+        InventorySortConfig.setRule(index, new io.github.mgthorn.garitonemineman.client.storage.SortRule(BuiltInRegistries.ITEM.getKey(dragged.getItem()).toString()));
         this.onChange.run();
     }
 

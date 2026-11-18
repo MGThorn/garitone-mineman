@@ -10,12 +10,10 @@
 		"MixinChatScreen",
 		"MixinGui",
 		"MixinGuiRenderer",
-		"MixinItemScrollerSort",
 		"MixinMouseHandler",
 		"MixinMultiPlayerGameMode",
 		"MixinSoundManager",
-		"MixinTweakerooInventoryUtils",
-		"ItemScrollerInventoryUtilsInvoker"
+		"MixinTweakerooInventoryUtils"
 	],
 	"injectors": {
 		"defaultRequire": 1

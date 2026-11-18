@@ -232,6 +232,26 @@ public class InitHandler implements IInitializationHandler {
             }
         );
 
+        Hotkeys.SORT_INVENTORY.getKeybind().setCallback(
+            (action, key) -> {
+                io.github.mgthorn.garitonemineman.client.feature.InventorySorter.sortFromHotkey();
+                return true;
+            }
+        );
+
+        Hotkeys.SORT_PROFILE_CYCLE.getKeybind().setCallback(
+            (action, key) -> {
+                var profile = io.github.mgthorn.garitonemineman.client.storage.InventorySortConfig.cycleProfile();
+                var player = Minecraft.getInstance().player;
+
+                if (player != null) {
+                    player.sendOverlayMessage(net.minecraft.network.chat.Component.literal("Sort profile: " + profile.getName()));
+                }
+
+                return true;
+            }
+        );
+
         InputEventHandler.getKeybindManager().registerKeybindProvider(new MinemanKeybindProvider());
     }
 

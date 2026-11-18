@@ -3,6 +3,7 @@ package io.github.mgthorn.garitonemineman.client.config;
 import java.util.List;
 import com.google.common.collect.ImmutableList;
 import fi.dy.masa.malilib.config.options.ConfigHotkey;
+import fi.dy.masa.malilib.hotkeys.KeyAction;
 import fi.dy.masa.malilib.hotkeys.KeybindSettings;
 
 public class Hotkeys {
@@ -28,10 +29,14 @@ public class Hotkeys {
     public static final ConfigHotkey ENTITY_ESP_TOGGLE                   = new ConfigHotkey("entityEspToggle",           "").apply(HOTKEYS_KEY);
     public static final ConfigHotkey DISABLE_PUMPKIN_OVERLAY_TOGGLE      = new ConfigHotkey("disablePumpkinOverlayToggle", "").apply(HOTKEYS_KEY);
     public static final ConfigHotkey TOOL_SWITCH_BACK_TOGGLE             = new ConfigHotkey("toolSwitchBackToggle",       "").apply(HOTKEYS_KEY);
+    // Only while an inventory/chest screen is open
+    public static final ConfigHotkey SORT_INVENTORY                      = new ConfigHotkey("sortInventory",              "", KeybindSettings.GUI).apply(HOTKEYS_KEY);
+    public static final ConfigHotkey SORT_PROFILE_CYCLE                  = new ConfigHotkey("sortProfileCycle",           "",
+            KeybindSettings.create(KeybindSettings.Context.ANY, KeyAction.PRESS, false, true, false, true)).apply(HOTKEYS_KEY);
 
     // Also shown in the Garitone and ESP tabs of the config screen
     public static final List<ConfigHotkey> GARITONE_HOTKEYS = ImmutableList.of(AUTO_EAT_TOGGLE, EASY_EAT, PAUSE_RESUME_TOGGLE, CANCEL_ALL_TASKS, STORAGE_STORE_ITEMS, STORAGE_CHEST_QUICK_DEPOSIT);
     public static final List<ConfigHotkey> ESP_HOTKEYS = ImmutableList.of(ITEM_ESP_TOGGLE, BLOCK_ESP_TOGGLE, ENTITY_ESP_TOGGLE);
 
-    public static final List<ConfigHotkey> HOTKEY_LIST = ImmutableList.of(OPEN_GUI, AUTO_EAT_TOGGLE, EASY_EAT, MOVE_MATCHING_IGNORE_METADATA_TOGGLE, SELECTION_SET_POS1, SELECTION_SET_POS2, PAUSE_RESUME_TOGGLE, CANCEL_ALL_TASKS, STORAGE_SET_GOAL, STORAGE_GO_TO, STORAGE_STORE_ITEMS, STORAGE_CHEST_QUICK_DEPOSIT, OPEN_TASK_MANAGER, OPEN_STORAGE_POINTS, MUTE_ALL_SOUNDS_TOGGLE, ITEM_ESP_TOGGLE, BLOCK_ESP_TOGGLE, ENTITY_ESP_TOGGLE, DISABLE_PUMPKIN_OVERLAY_TOGGLE, TOOL_SWITCH_BACK_TOGGLE);
+    public static final List<ConfigHotkey> HOTKEY_LIST = ImmutableList.of(OPEN_GUI, AUTO_EAT_TOGGLE, EASY_EAT, MOVE_MATCHING_IGNORE_METADATA_TOGGLE, SELECTION_SET_POS1, SELECTION_SET_POS2, PAUSE_RESUME_TOGGLE, CANCEL_ALL_TASKS, STORAGE_SET_GOAL, STORAGE_GO_TO, STORAGE_STORE_ITEMS, STORAGE_CHEST_QUICK_DEPOSIT, OPEN_TASK_MANAGER, OPEN_STORAGE_POINTS, MUTE_ALL_SOUNDS_TOGGLE, ITEM_ESP_TOGGLE, BLOCK_ESP_TOGGLE, ENTITY_ESP_TOGGLE, DISABLE_PUMPKIN_OVERLAY_TOGGLE, TOOL_SWITCH_BACK_TOGGLE, SORT_INVENTORY, SORT_PROFILE_CYCLE);
 }
